@@ -1,0 +1,17 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# SharpDevelop 2.1.0.2017
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DCPlusPlus", "DCPlusPlus.csproj", "{EB98FF80-F0EE-494E-902B-4EFFECAFAB88}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EB98FF80-F0EE-494E-902B-4EFFECAFAB88}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB98FF80-F0EE-494E-902B-4EFFECAFAB88}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB98FF80-F0EE-494E-902B-4EFFECAFAB88}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB98FF80-F0EE-494E-902B-4EFFECAFAB88}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+EndGlobal

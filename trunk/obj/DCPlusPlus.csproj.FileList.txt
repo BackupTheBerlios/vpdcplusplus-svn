@@ -1,0 +1,10 @@
+bin\Release\DCPlusPlus.dll
+bin\Release\DCPlusPlus.pdb
+obj\Release\ResolveAssemblyReference.cache
+obj\Release\DCPlusPlus.dll
+obj\Release\DCPlusPlus.pdb
+bin\Debug\DCPlusPlus.dll
+bin\Debug\DCPlusPlus.pdb
+obj\Debug\ResolveAssemblyReference.cache
+obj\Debug\DCPlusPlus.dll
+obj\Debug\DCPlusPlus.pdb
