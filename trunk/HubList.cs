@@ -462,27 +462,73 @@ namespace DCPlusPlus
 
 #region Unit Testing
         [Test]
-        public void TestDownload()
+        public void TestHubListDownload()
         {
+            Console.WriteLine("Test to download a hublist.");
             bool wait = true;
             HubList hublist = new HubList("http://www.hublist.co.uk/hublist.xml.bz2");
             //HubList hublist = new HubList("http://www.hublist.org/PublicHubList.xml.bz2");
-            hublist.Completed += delegate(object sender,int HubsNum)
+            hublist.Completed += delegate(object sender, int HubsNum)
             {
-                Console.WriteLine("Fetch Completed (Hubs found : "+HubsNum+")");
+                Console.WriteLine("");
+                Console.WriteLine("Fetch Completed (Hubs found : " + HubsNum + ")");
                 wait = false;
             };
             hublist.FetchHubs();
             //hublist.FetchHubs("http://www.hublist.org/PublicHubList.xml.bz2"); 
             Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
             while (wait)
             {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 30))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
                 Console.Write(".");
                 Thread.Sleep(250);
             }
-
+            Console.WriteLine("Hublist Download Test successful.");
 
         }
+
+        [Test]
+        public void TestHubListDownloadFailWrongUrl()
+        {
+            Console.WriteLine("Test to download a hublist (wrong url).");
+            bool wait = true;
+            HubList hublist = new HubList("http://ww.hublist.co.uk/hublist.xml.bz2");
+            //HubList hublist = new HubList("http://www.hublist.org/PublicHubList.xml.bz2");
+            hublist.Completed += delegate(object sender, int HubsNum)
+            {
+                Console.WriteLine("");
+                Console.WriteLine("Fetch Completed (Hubs found : " + HubsNum + ")");
+                wait = false;
+            };
+            hublist.FetchHubs();
+            //hublist.FetchHubs("http://www.hublist.org/PublicHubList.xml.bz2"); 
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 30))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("Hublist Download Test successful.");
+
+        }
+
+
+
 #endregion
     }
 }

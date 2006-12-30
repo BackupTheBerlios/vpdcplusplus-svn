@@ -144,22 +144,32 @@ namespace DCPlusPlus
         [Test]
         public void TestResolve()
         {
+            Console.WriteLine("Test to resolve own external ip.");
             bool wait = true;
             ExternalIP ex_ip = new ExternalIP();
             ex_ip.Completed += delegate(object sender, string external_ip)
             {
+                Console.WriteLine("");
                 Console.WriteLine("Fetch Completed (ip found : " + external_ip + ")");
+                Assert.IsTrue(!string.IsNullOrEmpty(external_ip),"no ip address fetched");
                 wait = false;
             };
             ex_ip.FetchIP();
             Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
             while (wait)
             {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 5))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
                 Console.Write(".");
                 Thread.Sleep(250);
             }
-
-
+            Console.WriteLine("External IP resolve Test successful.");
         }
         #endregion
     }

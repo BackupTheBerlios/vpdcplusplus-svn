@@ -125,7 +125,7 @@ namespace DCPlusPlus
                     return (sources);
                 }
             }
-            protected int filesize=0;
+            protected int filesize = 0;
             public int Filesize
             {
                 get
@@ -149,7 +149,7 @@ namespace DCPlusPlus
                 }
             }
 
-            protected string tth="";
+            protected string tth = "";
             public string TTH
             {
                 get
@@ -162,7 +162,7 @@ namespace DCPlusPlus
                 }
             }
 
-            protected string output_filename="";
+            protected string output_filename = "";
             public string OutputFilename
             {
                 get
