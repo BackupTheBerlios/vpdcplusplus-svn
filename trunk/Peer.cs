@@ -263,7 +263,7 @@ namespace DCPlusPlus
 
         }
 
-        public void StartDownload(string filename, string output_filename,int output_file_length)
+        public void StartDownload(string filename, string output_filename,long output_file_length)
         {
             this.output_filename = output_filename;
             this.filename = filename;

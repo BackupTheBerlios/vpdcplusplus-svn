@@ -125,8 +125,8 @@ namespace DCPlusPlus
                     return (sources);
                 }
             }
-            protected int filesize = 0;
-            public int Filesize
+            protected long filesize = 0;
+            public long Filesize
             {
                 get
                 {
