@@ -544,7 +544,7 @@ namespace DCPlusPlus
                     }
                     else
                     {
-                        Console.WriteLine("Unable to connect to server: " + name);
+                        Console.WriteLine("Unable to connect to server: " + name + "(address:" + address + ")");
                         if (Error != null)
                             Error(this, "Unable to connect to server.", ErrorCodes.UnableToConnect);
                     }
@@ -555,13 +555,13 @@ namespace DCPlusPlus
             {
                 if (sex.ErrorCode == 11001)
                 {
-                    Console.WriteLine("Error during Address resolve of Hub: " + name);
+                    Console.WriteLine("Error during Address resolve of Hub: " + name + "(address:" + address + ")");
                     if (Error != null)
                         Error(this, "Unable to connect to server.", ErrorCodes.UnableToConnect);
                 }
                 else
                 {
-                    Console.WriteLine("Error during Address resolve of Hub: " + name);
+                    Console.WriteLine("Error during Address resolve of Hub: " + name + "(address:" + address + ")");
                     if (Error != null)
                         Error(this, "Exception during Address resolve of Hub: " + sex.Message + ":" + sex.ErrorCode, ErrorCodes.Exception);
                 }
@@ -569,7 +569,7 @@ namespace DCPlusPlus
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error during Address resolve of Hub: " + name);
+                Console.WriteLine("Error during Address resolve of Hub: " + name + "(address:" + address + ")");
                 if (Error != null)
                     Error(this, "Exception during Address resolve of Hub: " + ex.Message, ErrorCodes.Exception);
 
@@ -690,7 +690,9 @@ namespace DCPlusPlus
 
             try
             {
-                socket.Send(Encoding.UTF8.GetBytes(send_string), SocketFlags.None);
+                //socket.Send(Encoding.UTF8.GetBytes(send_string), SocketFlags.None);
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(send_string);
+                socket.BeginSend(send_bytes, 0, send_bytes.Length, SocketFlags.None, new AsyncCallback(SendChatMessageCallback), socket);
             }
             catch (Exception e)
             {
@@ -698,6 +700,19 @@ namespace DCPlusPlus
                 if (Error != null)
                     Error(this, "Exception during sending chat message to hub: " + e.Message, ErrorCodes.Exception);
 
+            }
+        }
+
+        private void SendChatMessageCallback(IAsyncResult ar)
+        {
+            Socket send_chat_message_socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes = send_chat_message_socket.EndSend(ar);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during send of chat: " + ex.Message);
             }
         }
 
@@ -756,7 +771,6 @@ namespace DCPlusPlus
                 Search("TTH:" + search_tth,false,false,0,SearchFileType.tth);
             }
         }
-
 
         public void GetUserInfo(string user)
         {//TODO finish this 
@@ -951,7 +965,7 @@ namespace DCPlusPlus
                         break;
 
                     case "ForceMove":
-
+                        Console.WriteLine("FORCE MOVE NOT IMPLEMENTED");
                         break;
 
 

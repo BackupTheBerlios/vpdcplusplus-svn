@@ -148,7 +148,7 @@ namespace DCPlusPlus
             if (!busy)
             {
                 busy = true;
-                hubs.Clear();
+                //hubs.Clear();
                 columns.Clear();
                 if (ProgressChanged != null)
                     ProgressChanged(this, 0);
@@ -456,7 +456,17 @@ namespace DCPlusPlus
                     return (false);
                 }
             }
-            hubs.Add(hub);
+            bool unique = true;
+            foreach (Hub search in hubs)
+            {
+                if (search.Address == hub.Address)
+                {
+                    //Console.WriteLine("duplicate hub entry found: "+hub.Name);
+                    unique = false;
+                }
+            }
+            if(unique)
+                hubs.Add(hub);
             return (true);
         }
 

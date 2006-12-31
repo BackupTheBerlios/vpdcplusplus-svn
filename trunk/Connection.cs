@@ -60,8 +60,9 @@ namespace DCPlusPlus
                 try
                 {
                     //socket.Send(Encoding.UTF8.GetBytes(send_string), SocketFlags.None);
-                    socket.Send(System.Text.Encoding.Default.GetBytes(send_string), SocketFlags.None);
-
+                    //socket.Send(System.Text.Encoding.Default.GetBytes(send_string), SocketFlags.None);
+                    byte[] send_bytes = System.Text.Encoding.Default.GetBytes(send_string);
+                    socket.BeginSend(send_bytes, 0, send_bytes.Length, SocketFlags.None, new AsyncCallback(SendCommandCallback), socket);
                 }
                 catch (Exception e)
                 {
@@ -69,6 +70,20 @@ namespace DCPlusPlus
                 }
             }
         }
+
+        protected void SendCommandCallback(IAsyncResult ar)
+        {
+            Socket send_command_socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes = send_command_socket.EndSend(ar);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during send of command: " + ex.Message);
+            }
+        }
+
 
         #region LockToKey
 
