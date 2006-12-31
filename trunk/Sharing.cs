@@ -6,6 +6,7 @@ using System.IO;
 using System.Collections;
 using System.Threading;
 using NUnit.Framework;
+using Jcs.Tiger;
 
 namespace DCPlusPlus
 {
@@ -121,6 +122,12 @@ namespace DCPlusPlus
             System.IO.FileInfo fi = new FileInfo(filename);
             entry.Filesize = fi.Length;
             entry.TTH = "";
+            //now try to hash the file also
+            Tiger192 tiger = new Tiger192();
+            byte[] file_contents = System.IO.File.ReadAllBytes(filename);
+            tiger.ComputeHash(file_contents, 0, file_contents.Length);
+            Console.WriteLine("hash:"+Base32.GetString(tiger.Hash));
+
             return (entry);
         }
         private delegate void ShareDirectoryHandler(string directory);
