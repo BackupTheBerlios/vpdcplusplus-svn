@@ -32,6 +32,44 @@ namespace DCPlusPlus
             }
         }
 
+        protected bool is_connected = false;
+        public bool IsConnected
+        {
+            get
+            {
+                return (is_connected);
+            }
+
+        }
+
+        protected string ip = "";
+        public string IP
+        {
+            get
+            {
+                return (ip);
+            }
+            set
+            {
+                ip = value;
+            }
+        }
+
+        protected int port = 0;
+        public int Port
+        {
+            get
+            {
+                return (port);
+            }
+            set
+            {
+                port = value;
+            }
+        }
+
+
+
         protected Socket socket = null;
         protected byte[] receive_buffer = new byte[32768];
 

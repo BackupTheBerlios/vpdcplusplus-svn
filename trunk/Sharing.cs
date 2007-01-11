@@ -6,7 +6,9 @@ using System.IO;
 using System.Collections;
 using System.Threading;
 using NUnit.Framework;
-using Jcs.Tiger;
+//using Jcs.Tiger;
+using ThexCS;
+
 
 namespace DCPlusPlus
 {
@@ -27,7 +29,7 @@ namespace DCPlusPlus
                     filesize = value;
                 }
             }
-
+            [XmlIgnoreAttribute]
             public bool HasTTH
             {
                 get
@@ -88,6 +90,7 @@ namespace DCPlusPlus
             }
         }
 
+        [XmlIgnoreAttribute]
         protected Object share_lock = "";
         public Object SharingLock
         {
@@ -100,6 +103,9 @@ namespace DCPlusPlus
                 share_lock = value;
             }
         }
+
+        public delegate void DirectoryFinishedEventHandler(string directory);
+        public event DirectoryFinishedEventHandler DirectoryFinished;
 
         public delegate void EntryAddedEventHandler(SharingEntry entry);
         public event EntryAddedEventHandler EntryAdded;
@@ -119,28 +125,43 @@ namespace DCPlusPlus
             if (!System.IO.File.Exists(filename)) return (null);
             SharingEntry entry = new SharingEntry();
             entry.Filename = filename;
-            System.IO.FileInfo fi = new FileInfo(filename);
+            try
+            {
+                System.IO.FileInfo fi = new FileInfo(filename);
             entry.Filesize = fi.Length;
-            entry.TTH = "";
             //now try to hash the file also
+            /*
             Tiger192 tiger = new Tiger192();
             byte[] file_contents = System.IO.File.ReadAllBytes(filename);
-            tiger.ComputeHash(file_contents, 0, file_contents.Length);
-            Console.WriteLine("hash:"+Base32.GetString(tiger.Hash));
+            tiger.ComputeHash(file_contents, 0, file_contents.Length-1);
+            Console.WriteLine("hash:" + Base32.GetString(tiger.Hash));
+            entry.TTH = Base32.GetString(tiger.Hash);
+            */
+            ThexThreaded TTH = new ThexThreaded();
+            entry.TTH = Base32.ToBase32String(TTH.GetTTH_Value(filename));
 
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during hashing:" + ex.Message);
+            }
             return (entry);
         }
-        private delegate void ShareDirectoryHandler(string directory);
-        private void ShareDirectoryAsync(string directory)
+        private delegate string ShareDirectoryHandler(string directory);
+        private string ShareDirectoryAsync(string directory)
         {//recurse into directories
-
+            RecurseShareDirectoryAsync(directory);
+            return (directory);
+        }
+        private void RecurseShareDirectoryAsync(string directory)
+        {
             string[] files = Directory.GetFiles(directory);
             string[] dirs = Directory.GetDirectories(directory);
             foreach (string dir in dirs)
             {
                 if (System.IO.Directory.Exists(dir))
                 {
-                    ShareDirectoryAsync(dir);
+                    RecurseShareDirectoryAsync(dir);
                 }
             }
             foreach (string file in files)
@@ -163,7 +184,9 @@ namespace DCPlusPlus
         private void ShareDirectoryFinished(IAsyncResult result)
         {
             ShareDirectoryHandler sdh = (ShareDirectoryHandler)result.AsyncState;
-            sdh.EndInvoke(result);
+            string directory = sdh.EndInvoke(result);
+            if (DirectoryFinished != null)
+                DirectoryFinished(directory);
         }
 
         // share files with these functions
@@ -252,7 +275,6 @@ namespace DCPlusPlus
                         EntriesCleared();
                     if (EntryAdded != null)
                     {
-
                         foreach (SharingEntry entry in items)
                         {
                             EntryAdded(entry);
@@ -314,6 +336,22 @@ namespace DCPlusPlus
                 Console.WriteLine("Error saving queue to: " + filename + " : " + ex.Message);
             }
         }
+
+
+        public void UpdateFileLists()
+        {
+        }
+
+        public string GetFileListXml()
+        {
+            return ("");
+        }
+
+        public string GetFileListXmlBZ2()
+        {
+            return ("");
+        }
+
 
         #region ICollection<SharingEntry> Members
 
@@ -562,8 +600,12 @@ namespace DCPlusPlus
             s.EntryAdded = delegate(SharingEntry entry)
             {
                 Console.WriteLine("File Added: " + entry.Filename + ", filesize: " + entry.Filesize + ",tth: " + entry.TTH);
+            };
+            s.DirectoryFinished = delegate(string directory)
+            {
                 wait = false;
             };
+
             s.ShareDirectory("..\\..\\..\\TestDateien");
 
             Console.WriteLine("Waiting for data");
@@ -600,6 +642,9 @@ namespace DCPlusPlus
             {
                 //Console.WriteLine("");
                 Console.WriteLine("File Added: " + entry.Filename + ", filesize: " + entry.Filesize + ",tth: " + entry.TTH);
+            };
+            s.DirectoryFinished = delegate(string directory)
+            {
                 wait = false;
             };
             s.ShareDirectory("..\\..\\..\\TestDateien");
@@ -651,6 +696,9 @@ namespace DCPlusPlus
             s.EntryAdded = delegate(SharingEntry entry)
             {
                 Console.WriteLine("File Added: " + entry.Filename + ", filesize: " + entry.Filesize + ",tth: " + entry.TTH);
+            };
+            s.DirectoryFinished = delegate(string directory)
+            {
                 wait = false;
             };
             s.ShareDirectory("..\\..\\..\\TestDateien");
@@ -701,6 +749,9 @@ namespace DCPlusPlus
             s.EntryAdded = delegate(SharingEntry entry)
             {
                 Console.WriteLine("File Added: " + entry.Filename + ", filesize: " + entry.Filesize + ",tth: " + entry.TTH);
+            };
+            s.DirectoryFinished = delegate(string directory)
+            {
                 wait = false;
             };
             s.ShareDirectory("..\\..\\..\\TestDateien");
@@ -722,13 +773,13 @@ namespace DCPlusPlus
 
             //now check if items are correct
             Assert.IsTrue(s.items[0].Filename == "..\\..\\..\\TestDateien\\2sd.avi", "Filename not correct(2sd.avi).");
-            Assert.IsTrue(s.items[0].TTH == "QNGNAPOTVVZRPGSQPOH5X4RWITB3OI27KWXGCEI", "TTH not correct(2sd.avi).");
+            Assert.IsTrue(s.items[0].TTH == "QNGNAPOTVVZRPGSQPOH5X4RWITB3OI27KWXGCEI", "TTH not correct(2sd.avi)(\"" + s.items[0].TTH + "\"!=\"QNGNAPOTVVZRPGSQPOH5X4RWITB3OI27KWXGCEI\").");
             Assert.IsTrue(s.items[0].Filesize == 28495872, "Filesize not correct(2sd.avi).");
             Assert.IsTrue(s.items[1].Filename == "..\\..\\..\\TestDateien\\test.mp3", "Filename not correct(test.mp3).");
-            Assert.IsTrue(s.items[1].TTH == "LODVHCUGIS5G534HRWG4LIPXT5TPIO4SS6D2KKI", "TTH not correct(test.mp3).");
+            Assert.IsTrue(s.items[1].TTH == "LODVHCUGIS5G534HRWG4LIPXT5TPIO4SS6D2KKI", "TTH not correct(test.mp3)(\"" + s.items[1].TTH + "\"!=\"LODVHCUGIS5G534HRWG4LIPXT5TPIO4SS6D2KKI\").");
             Assert.IsTrue(s.items[1].Filesize == 6053888, "Filesize not correct(test.mp3).");
             Assert.IsTrue(s.items[2].Filename == "..\\..\\..\\TestDateien\\test2.mp3", "Filename not correct(test2.mp3).");
-            Assert.IsTrue(s.items[2].TTH == "6CFXRPW5GWT5NQGAU3DYZOCQBAYM63WST5J3HAY", "TTH not correct(test2.mp3).");
+            Assert.IsTrue(s.items[2].TTH == "6CFXRPW5GWT5NQGAU3DYZOCQBAYM63WST5J3HAY", "TTH not correct(test2.mp3)(\"" + s.items[2].TTH + "\"!=\"6CFXRPW5GWT5NQGAU3DYZOCQBAYM63WST5J3HAY\").");
             Assert.IsTrue(s.items[2].Filesize == 10539254, "Filesize not correct(test2.mp3).");
             Console.WriteLine("TTHs Creation Test successful.");
         }

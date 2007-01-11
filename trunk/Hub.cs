@@ -22,6 +22,12 @@ namespace DCPlusPlus
         public delegate void LoggedInEventHandler(Hub hub);
         public event LoggedInEventHandler LoggedIn;
 
+        public delegate void MoveForcedEventHandler(Hub src_hub, Hub dst_hub);
+        public event MoveForcedEventHandler MoveForced;
+
+        public delegate void ConnectToMeEventHandler(Hub hub, Peer connection);
+        public event ConnectToMeEventHandler ConnectToMeReceived;
+
         public delegate void DisconnectedEventHandler(Hub hub);
         public event DisconnectedEventHandler Disconnected;
 
@@ -109,20 +115,7 @@ namespace DCPlusPlus
             }
         }
 
-        protected string ip = "";
-        public string IP
-        {
-            get
-            {
-                return (ip);
-            }
-            set
-            {
-                ip = value;
-            }
-        }
-
-        protected long users = 0;
+         protected long users = 0;
         public long Users
         {
             get
@@ -200,18 +193,6 @@ namespace DCPlusPlus
             }
         }
 
-        protected int port = 411;
-        public int Port
-        {
-            get
-            {
-                return (port);
-            }
-            set
-            {
-                port = value;
-            }
-        }
 
         //TODO if nick differs and already loggedin send validatenick again to change nickname
 
@@ -237,16 +218,6 @@ namespace DCPlusPlus
             {
                 is_grabbed = value;
             }
-        }
-
-        protected bool is_connected = false;
-        public bool IsConnected
-        {
-            get
-            {
-                return (is_connected);
-            }
-
         }
 
         protected bool is_logged_in= false;
@@ -431,7 +402,7 @@ namespace DCPlusPlus
 
         public enum ConnectionMode
         {
-            Active,Passive,Socks5
+            Active,Passive//,Socks5
         }
         //Socks5 is not implemented atm
 
@@ -455,6 +426,7 @@ namespace DCPlusPlus
             is_extended_protocol = false;
             is_logged_in = false;
             socket = null;
+            port = 411;
             //Disconnect();
         }
 
@@ -780,7 +752,14 @@ namespace DCPlusPlus
 
         public void SendConnectToMe(string username)
         {
-            SendCommand("ConnectToMe", username + " " + my_ip + ":" + my_tcp_port);
+            if (my_connection_mode == ConnectionMode.Active)
+                SendCommand("ConnectToMe", username + " " + my_ip + ":" + my_tcp_port);
+            else SendCommand("RevConnectToMe",nick + " " + username);
+        }
+
+        public void SendConnectToMeV2(string username)
+        {
+            SendCommand("ConnectToMe", nick + " " + username + " " + my_ip + ":" + my_tcp_port);
         }
 
         public void SendMyInfo()
@@ -789,7 +768,7 @@ namespace DCPlusPlus
             //check if info changed and a myinfo command is actually needed
             if (my_connection_mode == Hub.ConnectionMode.Active) temp_connection_mode = "A";
             else if (my_connection_mode == Hub.ConnectionMode.Passive) temp_connection_mode = "P";
-            else if (my_connection_mode == Hub.ConnectionMode.Socks5) temp_connection_mode = "5";
+            //else if (my_connection_mode == Hub.ConnectionMode.Socks5) temp_connection_mode = "5";
             //SendCommand("MyINFO", "$ALL " + parameters[0] + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:0/0/0,S:2>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
             SendCommand("MyINFO", "$ALL " + nick + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:0/0/0,S:2,O:0>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
         }
@@ -890,7 +869,30 @@ namespace DCPlusPlus
                         break;
 
                     case "ConnectToMe":
+                            try
+                            {
+                                string peer_address = "";
+                                if (parameters.Length == 2)
+                                {
+                                    peer_address = parameters[1];
+                                }
+                                else if (parameters.Length == 3)
+                                {
+                                    peer_address = parameters[2];
+                                }
+                                else break;
+                                Peer peer = new Peer(peer_address); //add username also, to counter possible network attacks 
+                                if (ConnectToMeReceived != null)
+                                    ConnectToMeReceived(this, peer);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Exception in ConnectToMe EventHandler: " + ex.Message);
+                            }
+                        break;
+
                     case "RevConnectToMe":
+                        SendConnectToMe(parameters[0]);
                         break;
 
                     case "NickList":
@@ -965,7 +967,12 @@ namespace DCPlusPlus
                         break;
 
                     case "ForceMove":
-                        Console.WriteLine("FORCE MOVE NOT IMPLEMENTED");
+                        //Console.WriteLine("FORCE MOVE NOT IMPLEMENTED");
+                        if (MoveForced != null)
+                        {
+                            Hub dst_hub = this.Copy();
+                            MoveForced(this, dst_hub);
+                        }
                         break;
 
 
@@ -977,6 +984,7 @@ namespace DCPlusPlus
 
                     case "HubIsFull":
                         Console.WriteLine("Hub: " + name + " is full.");
+                        Disconnect();
                         break;
 
 
@@ -1027,6 +1035,64 @@ namespace DCPlusPlus
                 }
             }
             else Console.WriteLine("Error interpreting command: " + received_command);
+        }
+
+        public Hub Copy()
+        {
+            Hub ret = new Hub();
+            ret.address = this.address;
+            ret.auto_reconnect = this.auto_reconnect;
+            ret.country = this.country;
+            ret.description = this.description;
+            ret.ip = this.ip;
+            ret.is_connected = false;
+            ret.is_extended_protocol = false;
+            ret.is_grabbed = this.is_grabbed;
+            ret.is_logged_in = false;
+            ret.Connected = this.Connected;
+            ret.Disconnected = this.Disconnected;
+            ret.Error = this.Error;
+            ret.LoggedIn = this.LoggedIn;
+            ret.SearchResultReceived = this.SearchResultReceived;
+            ret.UserJoined = this.UserJoined;
+            ret.UserQuit = this.UserQuit;
+            ret.MoveForced = this.MoveForced;
+            ret.max_hubs = 0;
+            ret.max_users = 0;
+            ret.min_share = 0;
+            ret.min_slots = 0;
+            ret.my_connection_mode = this.my_connection_mode;
+            ret.my_connection_speed = this.my_connection_speed;
+            ret.my_email = this.my_email;
+            ret.my_ip = this.my_ip;
+            ret.my_name = this.my_name;
+            ret.my_share_size = this.my_share_size;
+            ret.my_tag_version = this.my_tag_version;
+            ret.my_tcp_port = this.my_tcp_port;
+            ret.my_udp_port = this.my_udp_port;
+            ret.my_version = this.my_version;
+            ret.name = this.name;
+            ret.nick = this.nick;
+            ret.op_list = new List<string>();
+            ret.port = this.port;
+            ret.shared = 0;
+            ret.topic = this.topic;
+            ret.user_list = new List<string>();
+            ret.UserList = new List<string>();
+            ret.users = 0;
+            return (ret);
+        }
+
+        public void Ungrab()
+        {
+            Connected = null;
+            Disconnected = null;
+            Error = null;
+            LoggedIn = null;
+            SearchResultReceived = null;
+            UserJoined = null;
+            UserQuit = null;
+            MoveForced = null;
         }
 
     }

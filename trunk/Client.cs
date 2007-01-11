@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
+using System.Reflection;
 
 namespace DCPlusPlus
 {
@@ -58,6 +59,16 @@ namespace DCPlusPlus
                 return (local_peer);
             }
         }
+
+        protected Sharing shares = new Sharing();
+        public Sharing Shares
+        {
+            get
+            {
+                return (shares);
+            }
+        }
+
 
         protected Object connected_hubs_lock = "";
         public Object ConnectedHubsLock
@@ -405,6 +416,11 @@ namespace DCPlusPlus
             }
         }
 
+        public string GetClientDirectory()
+        {
+            return (Path.GetDirectoryName(Assembly.GetExecutingAssembly().GetModules()[0].FullyQualifiedName));
+        }
+
         //deprecated
         public delegate void DownloadStartedEventHandler(Peer peer);
         public event DownloadStartedEventHandler DownloadStarted;
@@ -441,22 +457,37 @@ namespace DCPlusPlus
 
         public delegate void HubConnectedEventHandler(Hub hub);
         public event HubConnectedEventHandler HubConnected;
-    
-        public Client()
+
+        public delegate void HubMoveForcedEventHandler(Hub src_hub, Hub dst_hub);
+        public event HubMoveForcedEventHandler HubMoveForced;
+
+
+        private void SetupPeerEventHandler(Peer client)
         {
-
-            search_results.DiscardOldResults = true;
-        
-            local_peer.SearchResultReceived += delegate(object sender, SearchResults.SearchResult result)
-                {
-                    InterpretReceivedSearchResult(result);
-                };
-
-            local_peer.PeerConnected += delegate(object sender, Peer client)
-            {
-                client.Nick = nick;
+                            client.Nick = nick;
                 client.DataReceived += delegate(Peer data_received_client)
-                {
+                {/*
+                    Queue.QueueEntry entry = download_queue.FindFirstUnusedQueueEntryBySourceUser(data_received_client.PeerNick);
+                    if (entry != null)
+                    {
+                        Queue.QueueEntry.Source source = entry.FindFirstSourceByUser(data_received_client.PeerNick);
+                        if (source != null)
+                        {
+                            entry.IsInUse = true;
+                        }
+                        else
+                        {
+                            Console.WriteLine("no correct source found in queue entry for user: " + data_received_client.PeerNick);
+                            data_received_client.Disconnect();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("nothing found in queue for user: " + data_received_client.PeerNick);
+                        data_received_client.Disconnect();
+                    }
+                    */
+
                     if (PeerDataReceived != null)
                         PeerDataReceived(data_received_client);
                 };
@@ -471,8 +502,9 @@ namespace DCPlusPlus
                         Queue.QueueEntry.Source source = entry.FindFirstSourceByUser(handshake_client.PeerNick);
                         if (source != null)
                         {
-                            entry.IsInUse = true;
-                            handshake_client.StartDownload(source.Filename, entry.OutputFilename,entry.Filesize);
+                            //entry.IsInUse = true;
+                            //handshake_client.StartDownload(source.Filename, entry.OutputFilename, entry.Filesize);
+                            handshake_client.StartDownload(source, entry);
                             if (DownloadStarted != null)
                                 DownloadStarted(handshake_client);
                         }
@@ -491,7 +523,8 @@ namespace DCPlusPlus
 
                 client.Completed += delegate(Peer completed_client)
                 {
-                    download_queue.Remove(download_queue.FindQueueEntryByOutputFilename(completed_client.OutputFilename));
+                    //download_queue.Remove(download_queue.FindQueueEntryByOutputFilename(completed_client.OutputFilename));
+                    download_queue.Remove(completed_client.QueueEntry);
                     ContinueWithQueueForUser(completed_client.PeerNick);
                     if (PeerCompleted != null)
                         PeerCompleted(completed_client);
@@ -503,13 +536,30 @@ namespace DCPlusPlus
                     {
                         peers.Remove(disconnected_client);
                     }
-                    Queue.QueueEntry entry = download_queue.FindQueueEntryByOutputFilename(disconnected_client.OutputFilename);
-                    if (entry != null)
-                        entry.IsInUse = false;
+                    //Queue.QueueEntry entry = download_queue.FindQueueEntryByOutputFilename(disconnected_client.OutputFilename);
+                    //Queue.QueueEntry entry = disconnected_client.QueueEntry;
+                    //if (entry != null) //TODO this will cause trouble -> fix with disconnect cause change in callback
+                    //    entry.IsInUse = false;
                     ContinueWithQueueForUser(disconnected_client.PeerNick);//TODO prevent hammering on strange source with a seconds counter
                     if (PeerDisconnected != null)
                         PeerDisconnected(disconnected_client);
                 };
+        }
+
+
+        public Client()
+        {
+
+            search_results.DiscardOldResults = true;
+        
+            local_peer.SearchResultReceived += delegate(object sender, SearchResults.SearchResult result)
+                {
+                    InterpretReceivedSearchResult(result);
+                };
+
+            local_peer.PeerConnected += delegate(object sender, Peer client)
+            {
+                SetupPeerEventHandler(client);
                 if (PeerConnected != null)
                     PeerConnected(client);
                 client.StartHandShake();
@@ -521,7 +571,7 @@ namespace DCPlusPlus
             };
 
             
-
+            download_queue.DownloadDirectory = GetClientDirectory() + "\\downloads";
             share_size = 901 * 1024 * 1024;
             share_size = share_size * 1024; // until we support sharing .this is just fake to get in to the nicer hubs
         }
@@ -554,6 +604,28 @@ namespace DCPlusPlus
                 {
                     InterpretReceivedSearchResult(result);
                 };
+            me.MoveForced += delegate(Hub src_hub, Hub dst_hub)
+            {
+                if (HubMoveForced != null)
+                    HubMoveForced(src_hub, dst_hub);
+            };
+            me.ConnectToMeReceived += delegate(Hub hub, Peer connect_to_me_client)
+            {
+                //free slots check maybe needed
+                SetupPeerEventHandler(connect_to_me_client);
+                connect_to_me_client.Connected += delegate(Peer connect_to_me_connected_client)
+                {
+                    if (PeerConnected != null)
+                        PeerConnected(connect_to_me_connected_client);
+                    connect_to_me_connected_client.StartHandShake();
+                    lock (peers_lock)
+                    {
+                        peers.Add(connect_to_me_connected_client);
+                    }
+                };
+                connect_to_me_client.Connect();
+
+            };
             me.Disconnected += delegate(Hub hub)
             {
                 UpdateSourcesByHub(hub, false);

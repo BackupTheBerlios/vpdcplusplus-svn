@@ -364,13 +364,13 @@ namespace DCPlusPlus
                         {
                             if (!PeerConnected(this, new_peer)) client.Close();//if no slots avail just close connection
                         }
-
+                    
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine("Exception in Peer Connected Event: " + ex.Message);
                     }
-
+                            
                     //accept_socket.Close();
                 }
                 catch (Exception ex)

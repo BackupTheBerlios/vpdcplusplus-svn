@@ -213,6 +213,19 @@ namespace DCPlusPlus
                 }
             }
 
+            public bool TryToClaimEntry()
+            {
+                lock (sources_lock)
+                {
+                    if (!is_in_use)
+                    {
+                        is_in_use = true;
+                        return (true);
+                    }
+                    else return (false);
+                    }
+            }
+
             public Source FindFirstSourceByUser(string username)
             {
                 lock (sources_lock)

@@ -9,6 +9,9 @@ namespace DCPlusPlus
 {
     public class Peer : Connection
     {
+        public delegate void ConnectedEventHandler(Peer peer);
+        public event ConnectedEventHandler Connected;
+
         public delegate void DisconnectedEventHandler(Peer peer);
         public event DisconnectedEventHandler Disconnected;
 
@@ -55,7 +58,16 @@ namespace DCPlusPlus
 
         private int start_tick = 0;
         private FileStream out_stream=null;
-        
+
+        protected long bytes_already_downloaded = 0;
+        public long BytesAlreadyDownloaded
+        {
+            get
+            {
+                return (bytes_already_downloaded);
+            }
+        }
+
         protected long bytes_downloaded = 0;
         public long BytesDownloaded
         {
@@ -73,6 +85,15 @@ namespace DCPlusPlus
             }
         }
 
+        protected ConnectionDirection direction = ConnectionDirection.Download;
+        public ConnectionDirection Direction
+        {
+            get
+            {
+                return (direction);
+            }
+        }
+
         protected bool is_transfering = false;
         public bool IsTransfering
         {
@@ -82,6 +103,31 @@ namespace DCPlusPlus
             }
         }
 
+
+        protected Queue.QueueEntry queue_entry = new Queue.QueueEntry();
+        public Queue.QueueEntry QueueEntry
+        {
+            get
+            {
+                return (queue_entry);
+            }
+        }
+
+        protected Queue.QueueEntry.Source source = new Queue.QueueEntry.Source();
+        public Queue.QueueEntry.Source Source
+        {
+            get
+            {
+                return (source);
+            }
+        }
+
+        private bool first_bytes_received = false;
+
+
+
+        /*
+        
         protected long filelength = 0;
         public long FileLength
         {
@@ -109,7 +155,7 @@ namespace DCPlusPlus
                 return (filename);
             }
         }
-
+        */
         //protected string input_filename="";
 
         private void OnReceive(IAsyncResult result)
@@ -121,7 +167,7 @@ namespace DCPlusPlus
                 {
                     try
                     {
-                        if (filelength > 0 && bytes_downloaded == filelength)
+                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
                         {
                             try
                             {
@@ -134,6 +180,8 @@ namespace DCPlusPlus
                                 Console.WriteLine("Exception in Completed Event: " + ex.Message);
                             }
                         }
+                        if (first_bytes_received)
+                            queue_entry.IsInUse = false;
                         Console.WriteLine("Connection to peer dropped.");
 
                         if (Disconnected != null)
@@ -152,15 +200,27 @@ namespace DCPlusPlus
                 {
                     if (is_transfering)
                     {
+                        if (!first_bytes_received)
+                        {
+                            if(queue_entry.TryToClaimEntry())
+                            {
+                                first_bytes_received = true;
+                            }
+                            else Disconnect();
+
+                        }
+
                         bytes_downloaded += received_bytes;
                         //TODO quite buggy divide by zero prob
                         speed = (float)(((float)bytes_downloaded / 1024.0f) / ((float)(System.Environment.TickCount - start_tick) / 1000.0f));
                         //Console.WriteLine("Received " + received_bytes + " bytes of data. with a speed of: " + (((System.Environment.TickCount - start_tick) / 1000) / (bytes_downloaded / 1024)) + " KB/s");
-                        if(out_stream==null) //if we do not append we still have to create the output file
-                            out_stream = new FileStream(output_filename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
+
+                        if (out_stream == null) //if we do not append we still have to create the output file
+                            out_stream = new FileStream(queue_entry.OutputFilename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
 
                         out_stream.Write(receive_buffer, 0, received_bytes);
                         out_stream.Flush();
+
                         try
                         {
                             if (DataReceived != null)
@@ -171,8 +231,7 @@ namespace DCPlusPlus
                             Console.WriteLine("Exception in DataReceived Event: " + ex.Message);
                         }
 
-
-                        if (filelength > 0 && bytes_downloaded == filelength)
+                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
                         {
                             try
                             {
@@ -204,7 +263,7 @@ namespace DCPlusPlus
                 {
                     try
                     {
-                        if (filelength > 0 && bytes_downloaded == filelength)
+                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
                         {
                             try
                             {
@@ -217,6 +276,8 @@ namespace DCPlusPlus
                                 Console.WriteLine("Exception in Completed Event: " + ex.Message);
                             }
                         }
+                        if (first_bytes_received)
+                            queue_entry.IsInUse = false;
                         Console.WriteLine("Connection to peer dropped.");
 
                         if (Disconnected != null)
@@ -233,60 +294,85 @@ namespace DCPlusPlus
             }
             catch (Exception ex)
             {
-                try
-                {
-                    if (filelength > 0 && bytes_downloaded == filelength)
+                    try
                     {
-                        try
+                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
                         {
-                            if (Completed != null)
-                                Completed(this);
-                            return;
+                            try
+                            {
+                                if (Completed != null)
+                                    Completed(this);
+                                return;
+                            }
+                            catch (Exception ex2)
+                            {
+                                Console.WriteLine("Exception in Completed Event: " + ex2.Message);
+                            }
                         }
-                        catch (Exception ex2)
-                        {
-                            Console.WriteLine("Exception in Completed Event: " + ex2.Message);
-                        }
+                        if (first_bytes_received)
+                            queue_entry.IsInUse = false;
+                        Console.WriteLine("Error receiving data from Peer: " + ex.Message);
+                        if (Disconnected != null)
+                            Disconnected(this);
+
                     }
-
-                    Console.WriteLine("Error receiving data from Peer: "+ex.Message);
-                    if (Disconnected != null)
-                        Disconnected(this);
-
-                }
-                catch (Exception ex2)
-                {
-                    Console.WriteLine("Exception in Disconnected Event: " + ex2.Message);
-                }
-
+                    catch (Exception ex2)
+                    {
+                        Console.WriteLine("Exception in Disconnected Event: " + ex2.Message);
+                    }
+                
             }
 
         }
 
-        public void StartDownload(string filename, string output_filename,long output_file_length)
+        public enum ConnectionDirection
         {
-            this.output_filename = output_filename;
-            this.filename = filename;
+            //Incoming,Outgoing
+            Upload,Download
+        }
+
+
+        public void StartDownload()
+        {
+            direction = ConnectionDirection.Download;
             long start_pos = 1;
-            if (File.Exists(output_filename))
+            if (File.Exists(queue_entry.OutputFilename))
             {
-                FileInfo fi = new FileInfo(output_filename);
-                if (fi.Length >= output_file_length)
+                FileInfo fi = new FileInfo(queue_entry.OutputFilename);
+                if (fi.Length >= queue_entry.Filesize)
                 {//abort , file is complete or something else may happened here
                     Disconnect();
                     return;
                 }
                 start_pos = fi.Length + 1;
-                out_stream = new FileStream(output_filename, FileMode.Append, FileAccess.Write, System.IO.FileShare.ReadWrite);
+                bytes_already_downloaded =fi.Length;
+                out_stream = new FileStream(queue_entry.OutputFilename, FileMode.Append, FileAccess.Write, System.IO.FileShare.ReadWrite);
             }
             else start_pos = 1;
-
-
-            SendCommand("Get", filename+"$"+start_pos);
-            //SendCommand("Get", "MyList.DcLst$1");
-            //SendCommand("Get", "files.xml.bz2$1");
-            //out_stream = System.IO.File.Create("temp.avi");
+            SendCommand("Get", source.Filename + "$" + start_pos);
             SendCommand("Send");
+        }
+
+        
+        public void StartDownload(Queue.QueueEntry.Source source, Queue.QueueEntry entry)
+        {
+            this.queue_entry = entry;
+            this.source = source;
+            StartDownload();
+        }
+
+        
+        
+        public void StartDownload(string filename, string output_filename,long output_file_length)
+        {
+            //this.output_filename = output_filename;
+            //this.filename = filename;
+            queue_entry = new Queue.QueueEntry();
+            queue_entry.OutputFilename = output_filename;
+            queue_entry.Filesize = output_file_length;
+            source = new Queue.QueueEntry.Source();
+            source.Filename = filename;
+            StartDownload();
         }
         
         private void InterpretReceivedString(string received_string)
@@ -351,7 +437,11 @@ namespace DCPlusPlus
                         break;
                     case "FileLength":
                         //Console.WriteLine("FileLength command received: "+parameter);
-                        try { filelength = long.Parse(parameters[0]); }
+                        try 
+                        { 
+                            long filelength = long.Parse(parameters[0]);
+                            if (filelength != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
+                        }
                         catch (Exception ex) { Console.WriteLine("Error parsing file length: " + ex.Message); }
                         is_transfering = true;
                         start_tick = System.Environment.TickCount;
@@ -427,6 +517,43 @@ namespace DCPlusPlus
             StartReceiving();
         }
 
+        public Peer(string dst_ip, int dst_port)
+        {
+            ip = dst_ip;
+            port = dst_port;
+        }
+
+        public Peer(string address)
+        {
+            string tmp = address;
+            int port_start = tmp.IndexOf(":");
+            if (port_start != -1)
+            {
+                int tmp_port = 411;
+                string tmp_port_string = tmp.Substring(port_start + 1);
+                try
+                {
+                    tmp_port = int.Parse(tmp_port_string);
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("error parsing port : " + tmp_port_string);
+                }
+
+                tmp = tmp.Substring(0, port_start);
+                port = tmp_port;
+            }
+            ip = tmp; //ip or adress property?
+        }
+
+        public Peer()
+        {
+            ip = "";
+            port = 0;
+            socket = null;
+        }
+
+
         public void StartHandShake()
         {
             SendCommand("MyNick",nick);
@@ -458,9 +585,80 @@ namespace DCPlusPlus
             else Console.WriteLine("This socket is unused -> no disconnect needed.");
         }
 
-        public void ConnectTo(string ip,int port)
+        public void Connect()
         {
+            if (!is_connected)
+            {
+                try
+                {
+                    //Disconnect();//if still connected , disconnect first
+                    socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                    socket.Blocking = false;
+                    IPEndPoint endpoint = new IPEndPoint(IPAddress.Parse(ip), port);
+                    AsyncCallback event_connect = new AsyncCallback(OnConnect);
+                    socket.BeginConnect(endpoint, event_connect, socket);
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error connecting to Peer: " + ip + ":" + port);
+                    //if (Error != null)
+                    //    Error(this, "Exception during connect: " + ex.Message, ErrorCodes.Exception);
+
+                }
+            }
 
         }
+
+        public void ConnectTo(string dst_ip,int dst_port)
+        {
+            ip = dst_ip;
+            port = dst_port;
+            Connect();
+        }
+
+        private void OnConnect(IAsyncResult result)
+        {
+            Socket connect_socket = (Socket)result.AsyncState;
+
+            try
+            {
+                if (connect_socket.Connected)
+                {
+                    AsyncCallback event_receive = new AsyncCallback(OnReceive);
+                    connect_socket.BeginReceive(receive_buffer, 0, receive_buffer.Length, SocketFlags.None, event_receive, connect_socket);
+                    Console.WriteLine("Successfully connected to peer: " + ip+":"+port);
+                    try
+                    {
+                        if (Connected != null)
+                            Connected(this);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Exception in Connected event: " + ex.Message);
+                        //if (Error != null)
+                        //    Error(this, "Exception in Connected event: " + ex.Message, ErrorCodes.Exception);
+                    }
+
+                    is_connected = true;
+                }
+                else
+                {
+                    Console.WriteLine("Unable to connect to peer");
+                    //if (Error != null)
+                    //    Error(this, "Unable to connect to peer.", ErrorCodes.UnableToConnect);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error during connect to peer.");
+                //if (Error != null)
+                 //   Error(this, "Error during connect to peer: " + ex.Message, ErrorCodes.Exception);
+            }
+
+
+        }
+
     }
 }

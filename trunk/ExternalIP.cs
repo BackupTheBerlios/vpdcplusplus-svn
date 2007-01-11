@@ -128,8 +128,15 @@ namespace DCPlusPlus
                     //Console.WriteLine("temp_ip: '"+temp_ip+"'");
                     my_ip = temp_ip;
                     busy = false;
-                    if (Completed != null)
-                        Completed(this, my_ip);
+                    try
+                    {
+                        if (Completed != null)
+                            Completed(this, my_ip);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Exception during callback of own external ip resolve: "+ex.Message);
+                    }
                 }
             }
         }

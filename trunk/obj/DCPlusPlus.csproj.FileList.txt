@@ -8,5 +8,3 @@ bin\Debug\DCPlusPlus.pdb
 obj\Debug\ResolveAssemblyReference.cache
 obj\Debug\DCPlusPlus.dll
 obj\Debug\DCPlusPlus.pdb
-bin\Release\Jcs.Tiger.dll
-bin\Debug\Jcs.Tiger.dll
