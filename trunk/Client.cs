@@ -515,8 +515,11 @@ namespace DCPlusPlus
                     }
                     else
                     {
-                        Console.WriteLine("nothing found in queue for user: " + handshake_client.PeerNick);
-                        handshake_client.Disconnect();
+                        if (handshake_client.Direction == Peer.ConnectionDirection.Download)
+                        {
+                            Console.WriteLine("nothing found in queue for user: " + handshake_client.PeerNick);
+                            handshake_client.Disconnect();
+                        }
                     }
                 };
 

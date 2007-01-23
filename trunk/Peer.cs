@@ -4,9 +4,11 @@ using System.Text;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using NUnit.Framework;
 
 namespace DCPlusPlus
 {
+    [TestFixture]
     public class Peer : Connection
     {
         public delegate void ConnectedEventHandler(Peer peer);
@@ -85,7 +87,7 @@ namespace DCPlusPlus
             }
         }
 
-        protected ConnectionDirection direction = ConnectionDirection.Download;
+        protected ConnectionDirection direction = ConnectionDirection.Unknown;
         public ConnectionDirection Direction
         {
             get
@@ -124,6 +126,12 @@ namespace DCPlusPlus
 
         private bool first_bytes_received = false;
 
+
+        //handshake randoms for priority selection
+        private int handshake_my_value = 0;
+        private int handshake_his_value = 0;
+        private ConnectionDirection his_direction_wish = ConnectionDirection.Unknown;
+        //private ConnectionDirection my_direction_wish = ConnectionDirection.Unknown;
 
 
         /*
@@ -328,7 +336,7 @@ namespace DCPlusPlus
         public enum ConnectionDirection
         {
             //Incoming,Outgoing
-            Upload,Download
+            Upload,Download,Unknown
         }
 
 
@@ -350,6 +358,7 @@ namespace DCPlusPlus
             }
             else start_pos = 1;
             SendCommand("Get", source.Filename + "$" + start_pos);
+            Console.WriteLine("Trying to fetch file: '"+source.Filename+ "' starting from pos:"+start_pos);
             SendCommand("Send");
         }
 
@@ -406,11 +415,17 @@ namespace DCPlusPlus
                     parameter = received_command.Substring(command_end + 1);
                     parameters = parameter.Split(" ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
                 }
+                Console.WriteLine("Command: '" + command + "' ,Parameter(" + parameters.Length + "): '" + parameter + "'");
 
                 switch (command)
                 {
                     case "Direction":
-                        //Console.WriteLine("Direction command received: " + parameter);
+                        Console.WriteLine("Direction command received: " + parameter);
+                        handshake_his_value = int.Parse(parameters[1]);
+                        if (parameters[0] == "Download") //turns arround in terms of our perception of the direction.
+                            his_direction_wish = ConnectionDirection.Upload;
+                        else his_direction_wish = ConnectionDirection.Download;
+                        DecideDirection();
                         break;
                     case "MyNick":
                         peer_nick = parameters[0];
@@ -420,6 +435,7 @@ namespace DCPlusPlus
 
 
                     case "Supports":
+                        Console.WriteLine("Supports command received: " + parameter);
                         break;
 
                     case "MaxedOut":
@@ -430,10 +446,10 @@ namespace DCPlusPlus
                         //Console.WriteLine("GetListLen command received: " + parameter);
                         break;
                     case "Get":
-                        //Console.WriteLine("Get command received: " + parameter);
+                        Console.WriteLine("Get command received: " + parameter);
                         break;
                     case "Send":
-                        //Console.WriteLine("Send command received: " + parameter);
+                        Console.WriteLine("Send command received: " + parameter);
                         break;
                     case "FileLength":
                         //Console.WriteLine("FileLength command received: "+parameter);
@@ -453,6 +469,8 @@ namespace DCPlusPlus
                         //Random rnd = new Random();
                         //SendCommand("Direction","Download "+rnd.Next(49999).ToString());
                         //SendCommand("GetListLen");
+
+                        /*
                         try
                         {
                             if (HandShakeCompleted != null)
@@ -463,6 +481,8 @@ namespace DCPlusPlus
                         {
                             Console.WriteLine("Exception in Handshake Event: " + ex.Message);
                         }
+                        */
+
 
                         //SendCommand("Get", "extras series\\Extras - S01E05 [digitaldistractions].avi$1");
                         //SendCommand("Get", "MyList.DcLst$1");
@@ -482,13 +502,22 @@ namespace DCPlusPlus
                             {
                                 is_extended_protocol = true;
                                 //Console.WriteLine("Peer is using the dc++ protocol enhancements.");
+                                SendCommand("Supports", "MiniSlots XmlBZList ");
+                                //SendCommand("Supports", "MiniSlots XmlBZList ADCGet TTHL TTHF GetZBlock ZLIG ");
+                                //SendCommand("Supports", "MiniSlots XmlBZList TTHL TTHF GetZBlock ZLIG ");
+                                //SendCommand("Supports", "BZList TTHL TTHF GetZBlock´ZLIG ");
                             }
 
-                            string decoded_key = LockToKey2(key);
-
+                            string decoded_key = L2K(key);
+                            Random rnd = new Random();
+                            handshake_my_value = rnd.Next(32767);
                             //StartHandShake();
-                            SendCommand("Direction", "Download " + (49999).ToString());
-                        
+                            if(direction == ConnectionDirection.Upload)
+                                SendCommand("Direction", "Upload " + handshake_my_value.ToString());
+                            else SendCommand("Direction", "Download " + handshake_my_value.ToString());
+
+                            DecideDirection();
+
                             //Console.WriteLine("SendingDecoded key: " + decoded_key);
                             SendCommand("Key", decoded_key);
 
@@ -501,6 +530,28 @@ namespace DCPlusPlus
                 }
             }
             else Console.WriteLine("Error interpreting command: " + received_command);
+        }
+
+        private void DecideDirection()
+        {
+            if (direction == ConnectionDirection.Unknown && his_direction_wish!=ConnectionDirection.Unknown)
+            {//only decide once
+                if (handshake_my_value < handshake_his_value)
+                    direction = his_direction_wish;
+                else direction = ConnectionDirection.Download;
+
+                try
+                {
+                    if (HandShakeCompleted != null)
+                        HandShakeCompleted(this);
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Exception in Handshake Event: " + ex.Message);
+                }
+
+            }
         }
 
         public Peer(Socket client,string nick)

@@ -23,9 +23,10 @@ namespace DCPlusPlus
     [TestFixture]
     public class HubList
     {
-        public delegate void CompletedEventHandler(object sender, int HubsNum);
-        public delegate void ProgressChangedEventHandler(object sender, int percentage);
-        public delegate void ErrorEventHandler(object sender, int ErrorCode, string ErrorMessage);
+        public delegate void CompletedEventHandler(HubList hub_list);
+        public delegate void ProgressChangedEventHandler(HubList hub_list, int percentage);
+        public delegate void UnableToFetchHandler(HubList hub_list, int ErrorCode, string ErrorMessage); //our new error handler
+        
 
         protected string url;
         public string Url
@@ -253,7 +254,7 @@ namespace DCPlusPlus
             ReadXmlString(hubs_string);
             busy = false;
             if (Completed != null)
-                Completed(this,hubs.Count);
+                Completed(this);
 
         }
 
@@ -478,10 +479,10 @@ namespace DCPlusPlus
             bool wait = true;
             HubList hublist = new HubList("http://www.hublist.co.uk/hublist.xml.bz2");
             //HubList hublist = new HubList("http://www.hublist.org/PublicHubList.xml.bz2");
-            hublist.Completed += delegate(object sender, int HubsNum)
+            hublist.Completed += delegate(HubList hub_list)
             {
                 Console.WriteLine("");
-                Console.WriteLine("Fetch Completed (Hubs found : " + HubsNum + ")");
+                Console.WriteLine("Fetch Completed (Hubs found : " + hub_list.Hubs.Count + ")");
                 wait = false;
             };
             hublist.FetchHubs();
@@ -511,10 +512,10 @@ namespace DCPlusPlus
             bool wait = true;
             HubList hublist = new HubList("http://ww.hublist.co.uk/hublist.xml.bz2");
             //HubList hublist = new HubList("http://www.hublist.org/PublicHubList.xml.bz2");
-            hublist.Completed += delegate(object sender, int HubsNum)
+            hublist.Completed += delegate(HubList hub_list)
             {
                 Console.WriteLine("");
-                Console.WriteLine("Fetch Completed (Hubs found : " + HubsNum + ")");
+                Console.WriteLine("Fetch Completed (Hubs found : " + hub_list.Hubs.Count + ")");
                 wait = false;
             };
             hublist.FetchHubs();

@@ -8,6 +8,7 @@ using System.Threading;
 using NUnit.Framework;
 //using Jcs.Tiger;
 using ThexCS;
+using ICSharpCode.SharpZipLib;
 
 
 namespace DCPlusPlus

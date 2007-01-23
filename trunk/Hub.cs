@@ -5,9 +5,11 @@ using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 using System.IO;
+using NUnit.Framework;
 
 namespace DCPlusPlus
 {
+    [TestFixture]
     public class Hub : Connection
     {
         public delegate void SearchResultEventHandler(object sender, SearchResults.SearchResult result);
@@ -822,7 +824,7 @@ namespace DCPlusPlus
                     command = received_command.Substring(1, command_end - 1);
                     parameter = received_command.Substring(command_end + 1);
                     parameters = parameter.Split(" ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-                    //Console.WriteLine("Command: '" + command + "' ,Parameter("+parameters.Length+"): '" + parameter + "'");
+                    Console.WriteLine("Command: '" + command + "' ,Parameter(" + parameters.Length + "): '" + parameter + "'");
                 }
                 switch (command)
                 {
@@ -840,7 +842,7 @@ namespace DCPlusPlus
                             SendCommand("Version", my_version);
                             SendMyInfo();
                             SendCommand("GetNickList");
-                            //Console.WriteLine("Logged in Hub: "+name);
+                            Console.WriteLine("Logged in Hub: "+name);
                             try
                             {
                                 if (LoggedIn != null)
@@ -1017,11 +1019,13 @@ namespace DCPlusPlus
                             if (key.StartsWith("EXTENDEDPROTOCOL"))
                             {
                                 is_extended_protocol = true;
-                                //Console.WriteLine("Hub is using the dc++ protocol enhancements.");
-                                SendCommand("Supports", "MCTo TTHSearch HubTopic UserCommand");
+                                Console.WriteLine("Hub is using the dc++ protocol enhancements.");
+                                //SendCommand("Supports", "UserCommand NoGetINFO NoHello UserIP2 TTHSearch ZPipe0 GetZBlock ");
+                                SendCommand("Supports", "UserCommand TTHSearch ");
                             }
 
-                            string decoded_key = LockToKey(key);
+                            //string decoded_key = MyLockToKey(key);
+                            string decoded_key = L2K(key);
                             //Console.WriteLine("Decoded key: " + decoded_key);
                             SendCommand("Key" , decoded_key);
                             SendCommand("ValidateNick", nick);
@@ -1094,6 +1098,57 @@ namespace DCPlusPlus
             UserQuit = null;
             MoveForced = null;
         }
+
+
+
+        #region Unit Testing
+        [Test]
+        public void TestLocalHubConnect()
+        {
+            Console.WriteLine("Test to connect to a local hub (remember to start some hub before).");
+            bool wait = true;
+            Hub hub = new Hub();
+            hub.Address = "localhost";
+            hub.Connected += delegate(Hub connected)
+            {
+                Console.WriteLine("Hub Connected");
+                //Assert.IsTrue(!string.IsNullOrEmpty(external_ip), "no ip address fetched");
+                //wait = false;
+            };
+            hub.LoggedIn += delegate(Hub logged_in)
+            {
+                Console.WriteLine("Hub Logged in");
+                wait = false;
+            };
+            hub.Disconnected += delegate(Hub disconnected)
+            {
+                Console.WriteLine("Test failed : Hub disconnected.");
+            };
+            hub.Error += delegate(Hub error, string message, ErrorCodes error_code)
+            {
+                Console.WriteLine("Test failed : Hub error ->" + message);
+            };
+            hub.IsGrabbedByClient = true;
+            hub.Connect();
+            Console.WriteLine("Waiting for hub events.");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 10))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            hub.Disconnect();
+            Console.WriteLine("Local Hub Connect Test successful.");
+        }
+        #endregion
+
 
     }
 }
