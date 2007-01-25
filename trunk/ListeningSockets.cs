@@ -9,11 +9,11 @@ namespace DCPlusPlus
 {
     public class ListeningSockets
     {
-        public delegate void SearchResultEventHandler(object sender, SearchResults.SearchResult result);
+        public delegate void SearchResultEventHandler(SearchResults.SearchResult result);
 
         public event SearchResultEventHandler SearchResultReceived;
 
-        public delegate bool PeerConnectedEventHandler(object sender, Peer peer);
+        public delegate bool PeerConnectedEventHandler(Peer peer);
 
         public event PeerConnectedEventHandler PeerConnected;
 
@@ -319,7 +319,7 @@ namespace DCPlusPlus
                         try
                         {
                             if (SearchResultReceived != null)
-                                SearchResultReceived(this, result);
+                                SearchResultReceived( result);
                         }
                         catch (Exception ex)
                         {
@@ -362,7 +362,7 @@ namespace DCPlusPlus
                     {
                         if (PeerConnected != null)
                         {
-                            if (!PeerConnected(this, new_peer)) client.Close();//if no slots avail just close connection
+                            if (!PeerConnected(new_peer)) client.Close();//if no slots avail just close connection
                         }
                     
                     }

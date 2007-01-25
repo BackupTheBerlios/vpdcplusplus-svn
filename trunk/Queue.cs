@@ -193,6 +193,24 @@ namespace DCPlusPlus
                 }
             }
 
+            public enum EntryType
+            {
+                File,Directory,FileList
+            };
+            protected EntryType type = EntryType.File;
+            public EntryType Type
+            {
+                get
+                {
+                    return (type);
+                }
+                set
+                {
+                    type = value;
+
+                }
+            }
+
             protected bool is_in_use = false;
             [XmlIgnoreAttribute]
             public bool IsInUse
@@ -233,6 +251,18 @@ namespace DCPlusPlus
                     foreach (Source source in sources)
                     {
                         if (source.UserName == username) return (source);
+                    }
+                }
+                return (null);
+            }
+
+            public Source FindFirstSourceByUserAndHub(string username,Hub hub)
+            {
+                lock (sources_lock)
+                {
+                    foreach (Source source in sources)
+                    {
+                        if (source.UserName == username && source.HasHub && source.Hub == hub) return (source);
                     }
                 }
                 return (null);
@@ -299,6 +329,21 @@ namespace DCPlusPlus
             }
         }
 
+        protected string filelists_directory = ".\\downloads";
+        public string FileListsDirectory
+        {
+            get
+            {
+                return (filelists_directory);
+            }
+            set
+            {
+                filelists_directory = value;
+                if (filelists_directory.EndsWith("\\"))
+                    filelists_directory.TrimEnd('\\');
+            }
+        }
+
         protected Object queue_lock = "";
         public Object QueueLock
         {
@@ -327,7 +372,7 @@ namespace DCPlusPlus
         public delegate void EntriesClearedEventHandler();
         public event EntriesClearedEventHandler EntriesCleared;
 
-        //deprecated
+        //deprecated , because automatic adding of sources should make this a never to be called again function
         public QueueEntry FindExistingEntryForSearchResult(SearchResults.SearchResult result)
         {
             lock (queue_lock)
@@ -343,6 +388,52 @@ namespace DCPlusPlus
             }
         }
 
+        public QueueEntry FindExistingEntryForFileList(Hub hub,string username)
+        {
+            lock (queue_lock)
+            {
+                foreach (QueueEntry entry in items)
+                {
+                    if (entry.FindFirstSourceByUserAndHub(username,hub)!=null)
+                        return (entry);
+                }
+                return (null);
+            }
+        }
+
+
+        public void AddFileList(Hub hub,string username)
+        {
+                QueueEntry existing = FindExistingEntryForFileList(hub,username);
+                if (existing == null)
+                {
+                    QueueEntry entry = new QueueEntry();
+                    entry.Type = QueueEntry.EntryType.FileList;
+                    string temp_hub_address = hub.Address.Replace(":", "_");
+                    entry.OutputFilename = filelists_directory + "\\" + temp_hub_address + "-" + Base32.ToBase32String(Encoding.Default.GetBytes(username))+".xml.bz2";//TODO .. maybe changes needed here to incorporate other filelist formats
+                    lock (queue_lock)
+                    {
+                        entry.AddSource(new Queue.QueueEntry.Source(username, "",hub));
+                        items.Add(entry);
+                    }
+                    try
+                    {
+                        if (EntryAdded != null)
+                            EntryAdded(entry);
+                        if (EntriesChanged != null)
+                            EntriesChanged();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Exception occured in added event callback: " + ex.Message);
+                    }
+
+                }
+        }
+   
+
+        
+        
         public void AddSearchResult(SearchResults.SearchResult result)
         {
             if (result.IsFile)
@@ -358,6 +449,7 @@ namespace DCPlusPlus
                     return;
                 }
                 QueueEntry entry = new QueueEntry();
+                entry.Type = QueueEntry.EntryType.File;
                 entry.Filesize = result.Filesize;
                 entry.OutputFilename = download_directory + "\\" + System.IO.Path.GetFileName(result.Filename); //TODO add directory support somehow
                 if (File.Exists(entry.OutputFilename))
@@ -547,7 +639,8 @@ namespace DCPlusPlus
                     MemoryStream ms = new MemoryStream();
                     serializer.Serialize(ms, this);
                     ms.Flush();
-                    ret = System.Text.Encoding.Default.GetString(ms.GetBuffer());
+                    ret = System.Text.Encoding.Default.GetString(ms.GetBuffer(), 0, (int)ms.Length);//TODO ... 4gb crash border
+                    //ret = ret.TrimEnd((char)0);
                 }
                 catch (Exception ex)
                 {
@@ -575,6 +668,14 @@ namespace DCPlusPlus
         {
             try
             {
+                if (File.Exists(filename + ".backup") && File.Exists(filename))
+                    File.Delete(filename + ".backup");
+                if (File.Exists(filename))
+                {
+                    File.Move(filename, filename + ".backup");
+                    Console.WriteLine("Created Backup of queue: "+filename+".backup");
+                }
+
                 System.IO.File.WriteAllText(filename, SaveQueueToXml());
             }
             catch (Exception ex)

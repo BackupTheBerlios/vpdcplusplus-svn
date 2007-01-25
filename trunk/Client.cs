@@ -276,7 +276,13 @@ namespace DCPlusPlus
             */
         }
 
-        
+
+        public void GetFileList(Hub hub, string username)
+        {
+            download_queue.AddFileList(hub,username);
+            hub.SendConnectToMe(username); //signal download to hub to start it
+        }
+                
         public void StartDownload(SearchResults.SearchResult result)
         {
             if (result.IsHubResolved)
@@ -425,42 +431,20 @@ namespace DCPlusPlus
         public delegate void DownloadStartedEventHandler(Peer peer);
         public event DownloadStartedEventHandler DownloadStarted;
 
-        public delegate void PeerConnectedEventHandler(Peer peer);
-        public event PeerConnectedEventHandler PeerConnected;
 
-        public delegate void PeerDisconnectedEventHandler(Peer peer);
-        public event PeerDisconnectedEventHandler PeerDisconnected;
-
-        public delegate void PeerHandShakeCompletedEventHandler(Peer peer);
-        public event PeerHandShakeCompletedEventHandler PeerHandShakeCompleted;
-
-        public delegate void PeerCompletedEventHandler(Peer peer);
-        public event PeerCompletedEventHandler PeerCompleted;
-
-        public delegate void PeerDataReceivedEventHandler(Peer peer);
-        public event PeerDataReceivedEventHandler PeerDataReceived;
-
-        public delegate void HubUserQuitEventHandler(Hub hub, string username);
-        public event HubUserQuitEventHandler HubUserQuit;
-
-        public delegate void HubUserJoinedEventHandler(Hub hub, string username);
-        public event HubUserJoinedEventHandler HubUserJoined;
-
-        public delegate void HubErrorEventHandler(Hub hub,string message,Hub.ErrorCodes error_code);
-        public event HubErrorEventHandler HubError;
-
-        public delegate void HubLoggedInEventHandler(Hub hub);
-        public event HubLoggedInEventHandler HubLoggedIn;
-
-        public delegate void HubDisconnectedEventHandler(Hub hub);
-        public event HubDisconnectedEventHandler HubDisconnected;
-
-        public delegate void HubConnectedEventHandler(Hub hub);
-        public event HubConnectedEventHandler HubConnected;
-
-        public delegate void HubMoveForcedEventHandler(Hub src_hub, Hub dst_hub);
-        public event HubMoveForcedEventHandler HubMoveForced;
-
+        public event Peer.ConnectedEventHandler PeerConnected;
+        public event Peer.DisconnectedEventHandler PeerDisconnected;
+        public event Peer.HandShakeCompletedEventHandler PeerHandShakeCompleted;
+        public event Peer.CompletedEventHandler PeerCompleted;
+        public event Peer.DataReceivedEventHandler PeerDataReceived;
+        public event Hub.UserQuitEventHandler HubUserQuit;
+        public event Hub.UserJoinedEventHandler HubUserJoined;
+        public event Hub.UnableToConnectEventHandler HubUnableToConnect;
+        public event Hub.LoggedInEventHandler HubLoggedIn;
+        public event Hub.DisconnectedEventHandler HubDisconnected;
+        public event Hub.ConnectedEventHandler HubConnected;
+        public event Hub.MoveForcedEventHandler HubMoveForced;
+        public event Hub.MainChatLineReceivedEventHandler HubMainChatReceived;
 
         private void SetupPeerEventHandler(Peer client)
         {
@@ -504,7 +488,10 @@ namespace DCPlusPlus
                         {
                             //entry.IsInUse = true;
                             //handshake_client.StartDownload(source.Filename, entry.OutputFilename, entry.Filesize);
-                            handshake_client.StartDownload(source, entry);
+                            if (entry.Type == Queue.QueueEntry.EntryType.File)
+                                handshake_client.StartDownload(source, entry);
+                            else if (entry.Type == Queue.QueueEntry.EntryType.FileList)
+                                handshake_client.GetFileList(entry);
                             if (DownloadStarted != null)
                                 DownloadStarted(handshake_client);
                         }
@@ -543,7 +530,7 @@ namespace DCPlusPlus
                     //Queue.QueueEntry entry = disconnected_client.QueueEntry;
                     //if (entry != null) //TODO this will cause trouble -> fix with disconnect cause change in callback
                     //    entry.IsInUse = false;
-                    ContinueWithQueueForUser(disconnected_client.PeerNick);//TODO prevent hammering on strange source with a seconds counter
+                    //ContinueWithQueueForUser(disconnected_client.PeerNick);//TODO prevent hammering on strange source with a seconds counter
                     if (PeerDisconnected != null)
                         PeerDisconnected(disconnected_client);
                 };
@@ -555,12 +542,12 @@ namespace DCPlusPlus
 
             search_results.DiscardOldResults = true;
         
-            local_peer.SearchResultReceived += delegate(object sender, SearchResults.SearchResult result)
+            local_peer.SearchResultReceived += delegate(SearchResults.SearchResult result)
                 {
                     InterpretReceivedSearchResult(result);
                 };
 
-            local_peer.PeerConnected += delegate(object sender, Peer client)
+            local_peer.PeerConnected += delegate(Peer client)
             {
                 SetupPeerEventHandler(client);
                 if (PeerConnected != null)
@@ -573,7 +560,7 @@ namespace DCPlusPlus
                 return (true);//TODO if slots full return false here
             };
 
-            
+            download_queue.FileListsDirectory = GetClientDirectory() + "\\filelists";
             download_queue.DownloadDirectory = GetClientDirectory() + "\\downloads";
             share_size = 901 * 1024 * 1024;
             share_size = share_size * 1024; // until we support sharing .this is just fake to get in to the nicer hubs
@@ -603,10 +590,15 @@ namespace DCPlusPlus
             
             if(!me.IsGrabbedByClient) 
             {
-            me.SearchResultReceived += delegate(object sender, SearchResults.SearchResult result)
+            me.SearchResultReceived += delegate(Hub search_hub, SearchResults.SearchResult result)
                 {
                     InterpretReceivedSearchResult(result);
                 };
+            me.MainChatLineReceived += delegate(Hub chat_hub, Hub.ChatLine chat_line)
+            {
+                if (HubMainChatReceived != null)
+                    HubMainChatReceived(chat_hub, chat_line);
+            };
             me.MoveForced += delegate(Hub src_hub, Hub dst_hub)
             {
                 if (HubMoveForced != null)
@@ -650,7 +642,7 @@ namespace DCPlusPlus
                 if (HubConnected != null)
                     HubConnected(hub);
             };
-            me.Error += delegate(Hub hub, string message, Hub.ErrorCodes error_code)
+            me.UnableToConnect += delegate(Hub hub)
             {
                 UpdateSourcesByHub(hub, false);
                 lock (connected_hubs_lock)
@@ -658,8 +650,8 @@ namespace DCPlusPlus
                     if (connected_hubs.Contains(hub))
                         connected_hubs.Remove(hub);
                 }
-                if (HubError != null)
-                    HubError(hub, message, error_code);
+                if (HubUnableToConnect != null)
+                    HubUnableToConnect(hub);
             };
             me.LoggedIn += delegate(Hub hub)
             {

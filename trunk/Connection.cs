@@ -122,6 +122,44 @@ namespace DCPlusPlus
             }
         }
 
+        protected string[] supports=new string[0];
+        public string[] Supports
+        {
+            get
+            {
+                return (supports);
+            }
+        }
+
+        public bool CheckForExtension(string extension)
+        {
+            foreach (string supported_extension in supports)
+            {
+                if (supported_extension == extension)
+                    return (true);
+            }
+            return (false);
+        }
+
+
+        public enum ErrorCodes
+        {
+            UnableToConnect, Exception,UnknownException,NoFreeSlots,
+            FileNotAvailable,Kicked,Banned,Disconnected,
+            UnableToResolve,UrlNotFound,ProtocolError,
+            ConnectionTimedOut,UserDisconnect,NoErrorYet
+
+        }
+
+        protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
+        public Connection.ErrorCodes ErrorCode
+        {
+            get
+            {
+                return (error_code);
+            }
+        }
+
 
         #region LockToKey
 

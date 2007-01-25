@@ -185,7 +185,7 @@ namespace DCPlusPlus
                 Console.WriteLine("rest bits:" + (b.Length % 5));
                 output_length += (5 - (b.Length % 5));
             }
-            Console.WriteLine("bits in output buffer:" + output_length);
+            Console.WriteLine("bits in output buffer(+padding):" + output_length);
             byte[] output = new byte[output_length];
             output.Initialize();
             //output.Length
@@ -225,6 +225,15 @@ namespace DCPlusPlus
 												'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 
 												'Y', 'Z', '2', '3', '4', '5', '6', '7'};
 
+
+
+        public string FromBase32String(string input_string)
+        {//TODO
+            return ("");
+        }
+
+
+
         /// <summary>
         /// This method converts a byte array into a Base32-encoded string. The resulting
         /// string can be used safely for Windows file or directory names.
@@ -247,7 +256,7 @@ namespace DCPlusPlus
             //int resultLen = 4*((len + 2)/3);
             //StringBuffer result = new StringBuffer(resultLen);
 
-            // Translate all full groups from byte array elements to Base64
+            // Translate all full groups from byte array elements to Base32
             int byteIndexer = 0;
             for (int i = 0; i < numberOfGroups; i++)
             {

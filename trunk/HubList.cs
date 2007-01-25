@@ -15,6 +15,8 @@ using System.IO;
 // maybe name,address,columns better be put in list< >
 // maybe not ;-)
 
+// add checks so we can use uncompressed lists too ;-)
+
 
 namespace DCPlusPlus
 {
@@ -24,9 +26,28 @@ namespace DCPlusPlus
     public class HubList
     {
         public delegate void CompletedEventHandler(HubList hub_list);
-        public delegate void ProgressChangedEventHandler(HubList hub_list, int percentage);
-        public delegate void UnableToFetchHandler(HubList hub_list, int ErrorCode, string ErrorMessage); //our new error handler
-        
+        public delegate void ProgressChangedEventHandler(HubList hub_list);
+        public delegate void UnableToFetchEventHandler(HubList hub_list); //our new error handler
+
+        protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
+        public Connection.ErrorCodes ErrorCode
+        {
+            get
+            {
+                return (error_code);
+            }
+        }
+
+        protected int percentage=0;
+        public int Percentage
+        {
+            get
+            {
+                return (percentage);
+            }
+        }
+
+
 
         protected string url;
         public string Url
@@ -120,7 +141,7 @@ namespace DCPlusPlus
 
         public event CompletedEventHandler Completed;
         public event ProgressChangedEventHandler ProgressChanged;
-        public event ErrorEventHandler Error;
+        public event UnableToFetchEventHandler UnableToFetch;
 
         private WebClient wc = new WebClient();
         
@@ -129,7 +150,6 @@ namespace DCPlusPlus
             Url = "";
             wc.DownloadProgressChanged += new DownloadProgressChangedEventHandler(DownloadProgressCallback);
             wc.DownloadDataCompleted += new DownloadDataCompletedEventHandler(DownloadFileCallback);
-
         }
 
         public HubList(string HubListUrl)
@@ -151,8 +171,9 @@ namespace DCPlusPlus
                 busy = true;
                 //hubs.Clear();
                 columns.Clear();
+                percentage = 0;
                 if (ProgressChanged != null)
-                    ProgressChanged(this, 0);
+                    ProgressChanged(this);
                 try
                 {
                     wc.DownloadDataAsync(new Uri(Url));
@@ -160,8 +181,11 @@ namespace DCPlusPlus
                 catch (Exception ex)
                 {
                     Console.WriteLine("Exception occured during download: " + ex.Message);
+                    error_code = Connection.ErrorCodes.Exception;
+                    if (UnableToFetch != null)
+                        UnableToFetch(this);
+                    busy = false;
                 }
-
             }
         }
 
@@ -182,79 +206,101 @@ namespace DCPlusPlus
 
         private void DownloadFileCallback(object sender, DownloadDataCompletedEventArgs e)
         {
-            if (e.Cancelled) return;
-            //Console.WriteLine("Error:"+e.Error.Data.Values.ToString());
-            //if its a bz2 uncompress the data stream
-            //Stream input = new StreamReader(e.Result);
-            MemoryStream input = new MemoryStream(e.Result);
-            MemoryStream output = new MemoryStream();
-            ASCIIEncoding ascii = new ASCIIEncoding();
-            UTF8Encoding utf = new UTF8Encoding();
-            UnicodeEncoding unicode = new UnicodeEncoding();
-            
             try
             {
-                ICSharpCode.SharpZipLib.BZip2.BZip2.Decompress(input, output);
+                if (e.Cancelled) return;
+                if (e.Result == null || e.Result.Length == 0)
+                {
+                    error_code = Connection.ErrorCodes.UrlNotFound;
+                    Console.WriteLine("Error downloading hublist.");
+                    if (UnableToFetch != null)
+                        UnableToFetch(this);
+                    return;
+                }
+                //Console.WriteLine("Error:"+e.Error.Data.Values.ToString());
+                //if its a bz2 uncompress the data stream
+                //Stream input = new StreamReader(e.Result);
+                byte[] input_bytes = e.Result;
+                MemoryStream input = new MemoryStream(input_bytes);
+                MemoryStream output = new MemoryStream();
+                ASCIIEncoding ascii = new ASCIIEncoding();
+                UTF8Encoding utf = new UTF8Encoding();
+                UnicodeEncoding unicode = new UnicodeEncoding();
+
+                try
+                {
+                    ICSharpCode.SharpZipLib.BZip2.BZip2.Decompress(input, output);
+                }
+                catch (Exception ex)
+                {
+                    error_code = Connection.ErrorCodes.Exception;
+                    Console.WriteLine("Error uncompressing hublist: " + ex.Message);
+                    if (UnableToFetch != null)
+                        UnableToFetch(this);
+                    busy = false;
+                    return;
+                }
+                input.Flush();
+                byte[] out_data = output.GetBuffer();
+                //string hubs_string = ascii.GetString(out_data);
+
+                string hubs_string = System.Text.Encoding.Default.GetString(out_data);
+                //string hubs_string = utf.GetString(out_data);
+                int end = hubs_string.IndexOf((char)0);
+                if (end != -1) hubs_string = hubs_string.Remove(end);
+                //string hubs_string = unicode.GetString(out_data);
+                for (int i = 0; i < 0x1f; i++)
+                    if (i != 0x09 && i != 0x0a && i != 0x0d) hubs_string = hubs_string.Replace((char)i, ' ');//"&#x00"+i+";"
+
+                hubs_string = hubs_string.Replace("&", "&amp;");
+                bool inside_quotes = false;
+                for (int i = 0; i < hubs_string.Length; i++)
+                {
+                    if (hubs_string[i] == '\"' && inside_quotes == false)
+                    {
+                        inside_quotes = true;
+                    }
+                    else if (hubs_string[i] == '\"' && inside_quotes == true)
+                    {
+                        inside_quotes = false;
+                    }
+
+                    if (inside_quotes && hubs_string[i] == '<')
+                    {
+                        hubs_string = hubs_string.Remove(i, 1);
+                        hubs_string = hubs_string.Insert(i, "&lt;");
+                    }
+
+                    if (inside_quotes && hubs_string[i] == '>')
+                    {
+                        hubs_string = hubs_string.Remove(i, 1);
+                        hubs_string = hubs_string.Insert(i, "&gt;");
+                    }
+
+                    if (inside_quotes && hubs_string[i] == '')
+                    {
+                        hubs_string = hubs_string.Remove(i, 1);
+                        hubs_string = hubs_string.Insert(i, " ");
+                    }
+
+                }
+                //hubs_string = hubs_string.Replace("&", "&amp;");
+                //Console.WriteLine(hubs_string);
+                //File.WriteAllText("hublist.uncompressed.xml", hubs_string);
+                //output.Position = 0;
+                ReadXmlString(hubs_string);
+                busy = false;
+                if (Completed != null)
+                    Completed(this);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error uncompressing hublist: "+ex.Message);
+                error_code = Connection.ErrorCodes.Exception;
+                Console.WriteLine("exception during hublist fetch: " + ex.Message);
+                if (UnableToFetch != null)
+                    UnableToFetch(this);
                 busy = false;
-                return;
             }
-            input.Flush();
-            byte[] out_data = output.GetBuffer();
-            //string hubs_string = ascii.GetString(out_data);
-
-            string hubs_string = System.Text.Encoding.Default.GetString(out_data);
-            //string hubs_string = utf.GetString(out_data);
-            int end = hubs_string.IndexOf((char)0);
-            if (end != -1) hubs_string = hubs_string.Remove(end);
-            //string hubs_string = unicode.GetString(out_data);
-            for (int i = 0; i < 0x1f; i++)
-                if(i!=0x09 && i!=0x0a && i!=0x0d)hubs_string = hubs_string.Replace((char)i, ' ');//"&#x00"+i+";"
-            
-            hubs_string = hubs_string.Replace("&", "&amp;");
-            bool inside_quotes = false;
-            for (int i = 0; i < hubs_string.Length; i++)
-            {
-                if (hubs_string[i] == '\"' && inside_quotes == false)
-                {
-                    inside_quotes = true;
-                }
-                else if (hubs_string[i] == '\"' && inside_quotes == true)
-                {
-                    inside_quotes = false;
-                }
-
-                if (inside_quotes && hubs_string[i] == '<')
-                {
-                    hubs_string = hubs_string.Remove(i, 1);
-                    hubs_string = hubs_string.Insert(i,"&lt;");
-                }
-
-                if (inside_quotes && hubs_string[i] == '>')
-                {
-                    hubs_string = hubs_string.Remove(i, 1);
-                    hubs_string = hubs_string.Insert(i, "&gt;");
-                }
-
-                if (inside_quotes && hubs_string[i] == '')
-                {
-                    hubs_string = hubs_string.Remove(i, 1);
-                    hubs_string = hubs_string.Insert(i, " ");
-                }
-                
-            }
-
-            //hubs_string = hubs_string.Replace("&", "&amp;");
-            //Console.WriteLine(hubs_string);
-            //File.WriteAllText("hublist.uncompressed.xml", hubs_string);
-            //output.Position = 0;
-            ReadXmlString(hubs_string);
-            busy = false;
-            if (Completed != null)
-                Completed(this);
 
         }
 
@@ -267,8 +313,9 @@ namespace DCPlusPlus
                 e.TotalBytesToReceive,
                 e.ProgressPercentage);
           */
+            percentage = e.ProgressPercentage;
             if (ProgressChanged != null)
-                ProgressChanged(this, e.ProgressPercentage);
+                ProgressChanged(this);
 
         }
 
@@ -315,7 +362,11 @@ namespace DCPlusPlus
                 }
                 else
                 {
+                    error_code = Connection.ErrorCodes.Exception;
                     Console.WriteLine("xml exception:" + xe.Message);
+                    if (UnableToFetch != null)
+                        UnableToFetch(this);
+                    busy = false;
                     return (false);
                 }
                 
@@ -358,7 +409,11 @@ namespace DCPlusPlus
             }
             catch (XmlException xmle)
             {
+                error_code = Connection.ErrorCodes.Exception;
                 Console.WriteLine(xmle.Message);
+                if (UnableToFetch != null)
+                    UnableToFetch(this);
+                busy = false;
                 return (false);
 
             }
@@ -516,6 +571,13 @@ namespace DCPlusPlus
             {
                 Console.WriteLine("");
                 Console.WriteLine("Fetch Completed (Hubs found : " + hub_list.Hubs.Count + ")");
+                Assert.Fail("Failed at failing ;-(");
+            };
+
+            hublist.UnableToFetch += delegate(HubList hub_list_unable)
+            {
+                Console.WriteLine("");
+                Console.WriteLine("Unable to fetch hublist: "+ hub_list_unable.Address);
                 wait = false;
             };
             hublist.FetchHubs();
@@ -534,7 +596,7 @@ namespace DCPlusPlus
                 Console.Write(".");
                 Thread.Sleep(250);
             }
-            Console.WriteLine("Hublist Download Test successful.");
+            Console.WriteLine("Failed Hublist Download Test successful.");
 
         }
 

@@ -304,7 +304,9 @@ namespace DCPlusPlus
                     MemoryStream ms = new MemoryStream();
                     serializer.Serialize(ms, this);
                     ms.Flush();
-                    ret = System.Text.Encoding.Default.GetString(ms.GetBuffer());
+                    ret = System.Text.Encoding.Default.GetString(ms.GetBuffer(), 0, (int)ms.Length);//TODO ... 4gb crash border
+                    //ret = ret.TrimEnd((char)0);
+
                 }
                 catch (Exception ex)
                 {
@@ -330,6 +332,11 @@ namespace DCPlusPlus
         {
             try
             {
+                if (File.Exists(filename + ".backup") && File.Exists(filename))
+                    File.Delete(filename + ".backup");
+                if (File.Exists(filename))
+                    File.Move(filename, filename + ".backup");
+
                 System.IO.File.WriteAllText(filename, SaveSharesToXml());
             }
             catch (Exception ex)
@@ -339,18 +346,45 @@ namespace DCPlusPlus
         }
 
 
+        //string file_list
+
         public void UpdateFileLists()
         {
         }
 
         public string GetFileListXml()
         {
-            return ("");
+            string cid = "D2QLOGUYDX3QA";
+            string xml = "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n";
+            xml += "<FileListing Version=\"1\" CID=\""+cid+"\" Base=\"/\" Generator=\"vpDcPlusPlus 0.2\">\n";
+            /*
+            xml += "<Directory Name=\""+directory+"\">\n";
+            xml += "<File Name=\""+filename+"\" Size=\""+filesize+"\" TTH=\""+tth+"\"/>\n";
+            xml += "</Directory>\n";
+            xml += "</FileListing>\n";
+             */
+            return (xml);
         }
 
-        public string GetFileListXmlBZ2()
+        public byte[] GetFileListXmlBZ2()
         {
-            return ("");
+            try
+            {
+                string file_list = GetFileListXml();
+                MemoryStream input = new MemoryStream(System.Text.Encoding.Default.GetBytes(file_list));
+                MemoryStream output = new MemoryStream();
+
+                ICSharpCode.SharpZipLib.BZip2.BZip2.Compress(input, output, 1024);
+                input.Flush();
+                byte[] out_data = output.GetBuffer();
+                //string hubs_string = System.Text.Encoding.Default.GetString(out_data);
+                return (out_data);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error compressing file list: "+ex.Message);
+                return (null);
+            }
         }
 
 

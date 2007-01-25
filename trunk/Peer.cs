@@ -17,6 +17,9 @@ namespace DCPlusPlus
         public delegate void DisconnectedEventHandler(Peer peer);
         public event DisconnectedEventHandler Disconnected;
 
+        public delegate void UnableToConnectEventHandler(Hub hub);
+        public event UnableToConnectEventHandler UnableToConnect;
+
         public delegate void HandShakeCompletedEventHandler(Peer peer);
         public event HandShakeCompletedEventHandler HandShakeCompleted;
 
@@ -26,6 +29,7 @@ namespace DCPlusPlus
         public delegate void DataReceivedEventHandler(Peer peer);
         public event DataReceivedEventHandler DataReceived;
 
+      
         protected string peer_nick = "unknown";
         public string PeerNick
         {
@@ -340,6 +344,32 @@ namespace DCPlusPlus
         }
 
 
+        public void GetFileList(Queue.QueueEntry entry)
+        {//try to download a filelist that the peer offers by his supports
+            //it would be fine to have these converted on the spot to our standard filelist format (files.xml.bz2)
+            this.queue_entry = entry;
+            this.source = entry.Sources[0];//filelist queue entry have exactly one source , no more no less
+            direction = ConnectionDirection.Download;
+            long start_pos = 1;
+            if (File.Exists(queue_entry.OutputFilename))
+            {
+                File.Delete(queue_entry.OutputFilename);//delete old filelist if happen to be there
+            }
+            
+            string filename = "MyList.DcLst";
+            if(CheckForExtension("XmlBZList"))
+                filename = "files.xml.bz2";
+            else if(CheckForExtension("BZList"))
+                filename = "MyList.bz2";
+
+            this.source.Filename = filename;
+            SendCommand("Get", filename + "$" + start_pos);
+            Console.WriteLine("Trying to fetch filelist("+filename+") from: '" + entry.Sources[0].UserName + "'");
+            SendCommand("Send");
+
+        }
+
+
         public void StartDownload()
         {
             direction = ConnectionDirection.Download;
@@ -358,7 +388,7 @@ namespace DCPlusPlus
             }
             else start_pos = 1;
             SendCommand("Get", source.Filename + "$" + start_pos);
-            Console.WriteLine("Trying to fetch file: '"+source.Filename+ "' starting from pos:"+start_pos);
+            Console.WriteLine("Trying to fetch file: '" + source.Filename + "' starting from pos:" + start_pos);
             SendCommand("Send");
         }
 
@@ -369,8 +399,7 @@ namespace DCPlusPlus
             this.source = source;
             StartDownload();
         }
-
-        
+                
         
         public void StartDownload(string filename, string output_filename,long output_file_length)
         {
@@ -415,12 +444,12 @@ namespace DCPlusPlus
                     parameter = received_command.Substring(command_end + 1);
                     parameters = parameter.Split(" ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
                 }
-                Console.WriteLine("Command: '" + command + "' ,Parameter(" + parameters.Length + "): '" + parameter + "'");
+                //Console.WriteLine("Command: '" + command + "' ,Parameter(" + parameters.Length + "): '" + parameter + "'");
 
                 switch (command)
                 {
                     case "Direction":
-                        Console.WriteLine("Direction command received: " + parameter);
+                        //Console.WriteLine("Direction command received: " + parameter);
                         handshake_his_value = int.Parse(parameters[1]);
                         if (parameters[0] == "Download") //turns arround in terms of our perception of the direction.
                             his_direction_wish = ConnectionDirection.Upload;
@@ -435,10 +464,12 @@ namespace DCPlusPlus
 
 
                     case "Supports":
-                        Console.WriteLine("Supports command received: " + parameter);
+                        //Console.WriteLine("Supports command received: " + parameter);
+                        supports = (string[])parameters.Clone();
                         break;
 
                     case "MaxedOut":
+                        error_code = ErrorCodes.NoFreeSlots;
                         Disconnect();
                         break;
 
@@ -456,7 +487,9 @@ namespace DCPlusPlus
                         try 
                         { 
                             long filelength = long.Parse(parameters[0]);
-                            if (filelength != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
+                            if (queue_entry.Type == Queue.QueueEntry.EntryType.File && filelength != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
+                            if (queue_entry.Type == Queue.QueueEntry.EntryType.FileList)
+                                queue_entry.Filesize = filelength;
                         }
                         catch (Exception ex) { Console.WriteLine("Error parsing file length: " + ex.Message); }
                         is_transfering = true;
@@ -652,7 +685,7 @@ namespace DCPlusPlus
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Error connecting to Peer: " + ip + ":" + port);
+                    Console.WriteLine("Error connecting to Peer: " + ip + ":" + port + "(exception:" + ex.Message + ")");
                     //if (Error != null)
                     //    Error(this, "Exception during connect: " + ex.Message, ErrorCodes.Exception);
 
@@ -703,7 +736,7 @@ namespace DCPlusPlus
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error during connect to peer.");
+                Console.WriteLine("Error during connect to peer(exception:"+ex.Message+").");
                 //if (Error != null)
                  //   Error(this, "Error during connect to peer: " + ex.Message, ErrorCodes.Exception);
             }
