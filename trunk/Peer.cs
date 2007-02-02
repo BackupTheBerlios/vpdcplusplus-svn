@@ -29,7 +29,19 @@ namespace DCPlusPlus
         public delegate void DataReceivedEventHandler(Peer peer);
         public event DataReceivedEventHandler DataReceived;
 
+
+        public enum FileRequestAnswer
+        {
+            FileNotAvailable,NoFreeSlots,LetsGo
+        }
+
+        public delegate FileRequestAnswer FileRequestReceivedEventHandler(Peer peer);
+        public event FileRequestReceivedEventHandler FileRequestReceived;
+
+        public delegate FileRequestAnswer FileListRequestReceivedEventHandler(Peer peer);
+        public event FileListRequestReceivedEventHandler FileListRequestReceived;
       
+
         protected string peer_nick = "unknown";
         public string PeerNick
         {
@@ -63,7 +75,8 @@ namespace DCPlusPlus
         }
 
         private int start_tick = 0;
-        private FileStream out_stream=null;
+        //private FileStream file_stream=null;
+        private Stream stream=null;
 
         protected long bytes_already_downloaded = 0;
         public long BytesAlreadyDownloaded
@@ -83,6 +96,26 @@ namespace DCPlusPlus
             }
         }
 
+
+        protected long bytes_already_uploaded = 0;
+        public long BytesAlreadyUploaded
+        {
+            get
+            {
+                return (bytes_already_uploaded);
+            }
+        }
+
+        protected long bytes_uploaded = 0;
+        public long BytesUploaded
+        {
+            get
+            {
+                return (bytes_uploaded);
+            }
+        }
+
+
         protected float speed = 0;
         public float Speed
         {
@@ -100,12 +133,21 @@ namespace DCPlusPlus
             }
         }
 
-        protected bool is_transfering = false;
-        public bool IsTransfering
+        protected bool is_downloading = false;
+        public bool IsDownloading
         {
             get
             {
-                return (is_transfering);
+                return (is_downloading);
+            }
+        }
+
+        protected bool is_uploading = false;
+        public bool IsUploading
+        {
+            get
+            {
+                return (is_uploading);
             }
         }
 
@@ -127,6 +169,64 @@ namespace DCPlusPlus
                 return (source);
             }
         }
+
+
+        protected long upload_offset = 0;
+        public long UploadOffset
+        {
+            get
+            {
+                return (upload_offset);
+            }
+        }
+
+        protected long upload_length = 0;
+        public long UploadLength
+        {
+            get
+            {
+                return (upload_length);
+            }
+        }
+
+
+        protected string upload_request_filename="";
+        public string UploadRequestFilename
+        {
+            get
+            {
+                return (upload_request_filename);
+            }
+        }
+
+        protected string upload_filename="";
+        public string UploadFilename
+        {
+            get
+            {
+                return (upload_filename);
+            }
+            set
+            {
+                upload_filename = value;
+            }
+        }
+
+        protected byte[] upload_file_list_data=null;
+        public byte[] UploadFileListData
+        {
+            get
+            {
+                return (upload_file_list_data);
+            }
+            set
+            {
+                upload_file_list_data = value;
+            }
+        }
+
+
+
 
         private bool first_bytes_received = false;
 
@@ -210,7 +310,7 @@ namespace DCPlusPlus
                 int received_bytes = receive_socket.EndReceive(result);
                 if (received_bytes > 0)
                 {
-                    if (is_transfering)
+                    if (is_downloading)
                     {
                         if (!first_bytes_received)
                         {
@@ -227,11 +327,11 @@ namespace DCPlusPlus
                         speed = (float)(((float)bytes_downloaded / 1024.0f) / ((float)(System.Environment.TickCount - start_tick) / 1000.0f));
                         //Console.WriteLine("Received " + received_bytes + " bytes of data. with a speed of: " + (((System.Environment.TickCount - start_tick) / 1000) / (bytes_downloaded / 1024)) + " KB/s");
 
-                        if (out_stream == null) //if we do not append we still have to create the output file
-                            out_stream = new FileStream(queue_entry.OutputFilename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
+                        if (stream == null) //if we do not append we still have to create the output file
+                            stream = new FileStream(queue_entry.OutputFilename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
 
-                        out_stream.Write(receive_buffer, 0, received_bytes);
-                        out_stream.Flush();
+                        stream.Write(receive_buffer, 0, received_bytes);
+                        stream.Flush();
 
                         try
                         {
@@ -254,8 +354,8 @@ namespace DCPlusPlus
                             {
                                 Console.WriteLine("Exception in Completed Event: " + ex.Message);
                             }
-
-                            SendCommand("Send");
+                            if(!CheckForExtension("ADCGet"))
+                                SendCommand("Send");
                             Disconnect();
                         }
                     }
@@ -362,13 +462,181 @@ namespace DCPlusPlus
             else if(CheckForExtension("BZList"))
                 filename = "MyList.bz2";
 
-            this.source.Filename = filename;
-            SendCommand("Get", filename + "$" + start_pos);
-            Console.WriteLine("Trying to fetch filelist("+filename+") from: '" + entry.Sources[0].UserName + "'");
-            SendCommand("Send");
+            source.Filename = filename;
+
+            if (CheckForExtension("ADCGet"))
+            {
+                start_pos = start_pos - 1;
+                SendCommand("ADCGET", "file " + source.Filename + " " + start_pos + " -1");
+                Console.WriteLine("Trying to adc-fetch filelist(" + filename + ") from: '" + entry.Sources[0].UserName + "'");
+            }
+            else
+            {
+                SendCommand("Get", filename + "$" + start_pos);
+                Console.WriteLine("Trying to fetch filelist(" + filename + ") from: '" + entry.Sources[0].UserName + "'");
+            }
 
         }
 
+        public void SendMaxedOut()
+        {
+            SendCommand("MaxedOut");
+        }
+
+        public void SendFileNotAvailableError()
+        {
+            SendError("File Not Available");
+        }
+
+        public void SendError(string message)
+        {
+            SendCommand("Error", message);
+        }
+
+        public void SendFailed(string message)
+        {
+            SendCommand("Failed",message);
+        }
+
+
+        public bool StartUpload()
+        {
+            direction = ConnectionDirection.Upload; //TODO enhance Direction handling -> esp uploading if we have nothing to to download from the user
+            if (!string.IsNullOrEmpty(upload_filename))
+            {
+                if (upload_file_list_data != null)
+                {
+                    upload_length = upload_file_list_data.Length;
+                    stream = new MemoryStream(upload_file_list_data);
+                    stream.Seek(upload_offset, SeekOrigin.Begin);
+                }
+                else
+                {
+                    if (File.Exists(upload_filename))
+                    {
+                        FileInfo fi = new FileInfo(upload_filename);
+                        if (fi.Length < upload_offset)
+                        {//abort , file is complete or something else may happened here
+                            Console.WriteLine("error requesting data at offset: " + fi.Length + " after file end: " + upload_offset);
+                            Disconnect();
+                            return (false);
+                        }
+                        if (fi.Length < upload_offset + upload_length || upload_length == -1)
+                        {//abort , file is complete or something else may happened here
+                            upload_length = fi.Length-upload_offset;
+                        }
+                        //Console.WriteLine("Trying to open file: "+f);
+                        try
+                        {
+                            stream = new FileStream(upload_filename, FileMode.Open, FileAccess.Read, System.IO.FileShare.ReadWrite);
+                            stream.Seek(upload_offset, SeekOrigin.Begin);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("exception opening file: " + ex.Message);
+                            SendFileNotAvailableError();
+                            return (false);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Requested file not found: "+upload_filename);
+                        SendFileNotAvailableError();
+                        return (false);
+                    }
+                }
+                if (CheckForExtension("ADCGet"))
+                {
+
+                    string send_parameters = "file " + upload_request_filename + " " + upload_offset + " " + upload_length;
+                    Console.WriteLine("adc send parameters : "+ send_parameters);
+                    SendCommand("ADCSND",send_parameters);
+                    Console.WriteLine("Trying to adc-upload file: '" + upload_filename + "' starting from pos:" + upload_offset + " length: " + upload_length);
+                    StartUploadTransfer();
+                }
+                else
+                {
+                    SendCommand("FileLength", upload_length.ToString());
+                    Console.WriteLine("Trying to upload file: '" + upload_filename + "' starting from pos:" + upload_offset + " length: " + upload_length);
+                }
+                return (true);
+            }
+            return (false);
+        }
+
+        private long upload_block_size = 1024;
+
+        public void StartUploadTransfer()
+        {
+            is_uploading = true;
+            start_tick = System.Environment.TickCount;
+            bytes_uploaded = 0;
+            if (socket != null)
+            {
+                if (!socket.Connected) return;
+                try
+                {
+                    if (upload_length < upload_block_size) upload_block_size = upload_length;//TODO maybe better to change back after upload finished .. if we reuse peers
+                    byte[] send_bytes = new byte[upload_block_size];
+                    int bytes_read = stream.Read(send_bytes, (int)0, (int)upload_block_size);
+                    Console.WriteLine("Sending the first " + bytes_read + " byte(s) of file: " + upload_request_filename);
+                    socket.BeginSend(send_bytes, 0, bytes_read, SocketFlags.None, new AsyncCallback(UploadTransferCallback), socket);
+                    //socket.BeginSend(upload_file_list_data, 0, upload_file_list_data.Length, SocketFlags.None, new AsyncCallback(UploadTransferCallback), socket);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Error sending command to peer: " + e.Message);
+                }
+            }
+
+        }
+
+
+        protected void UploadTransferCallback(IAsyncResult ar)
+        {
+            Socket upload_data_socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = upload_data_socket.EndSend(ar);
+                bytes_uploaded += bytes_sent;
+                if (socket != null)
+                {
+                    if (bytes_uploaded == upload_length)
+                    {
+                        Disconnect();
+                        return;
+                    }
+                    if (!socket.Connected) return;
+                    if (upload_length-bytes_uploaded < upload_block_size) upload_block_size = upload_length-bytes_uploaded;//TODO maybe better to change back after upload finished .. if we reuse peers
+                    byte[] send_bytes = new byte[upload_block_size];
+                    //int bytes_read = stream.Read(send_bytes, (int)upload_offset + (int)bytes_uploaded, (int)upload_block_size);
+                    int bytes_read = stream.Read(send_bytes, 0, (int)upload_block_size);
+                    //Console.WriteLine("Already sent " + bytes_uploaded + " byte(s) of file: " + upload_request_filename);
+                    //bytes_uploaded += bytes_read;
+                    socket.BeginSend(send_bytes, 0, bytes_read, SocketFlags.None, new AsyncCallback(UploadTransferCallback), socket);
+                    //socket.BeginSend(upload_file_list_data, 0, upload_file_list_data.Length, SocketFlags.None, new AsyncCallback(UploadTransferCallback), socket);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of data: " + ex.Message);
+            }
+        }
+
+
+
+
+        public void StartDownloadTransfer()
+        {
+            is_downloading = true;
+            start_tick = System.Environment.TickCount;
+            bytes_downloaded = 0;
+            if (!CheckForExtension("ADCGet"))
+            {
+                SendCommand("Send");
+            }
+        }
 
         public void StartDownload()
         {
@@ -384,12 +652,23 @@ namespace DCPlusPlus
                 }
                 start_pos = fi.Length + 1;
                 bytes_already_downloaded =fi.Length;
-                out_stream = new FileStream(queue_entry.OutputFilename, FileMode.Append, FileAccess.Write, System.IO.FileShare.ReadWrite);
+                stream = new FileStream(queue_entry.OutputFilename, FileMode.Append, FileAccess.Write, System.IO.FileShare.ReadWrite);
             }
             else start_pos = 1;
-            SendCommand("Get", source.Filename + "$" + start_pos);
-            Console.WriteLine("Trying to fetch file: '" + source.Filename + "' starting from pos:" + start_pos);
-            SendCommand("Send");
+
+            if (CheckForExtension("ADCGet"))
+            {
+                start_pos = start_pos - 1;
+                if (CheckForExtension("TTHF") && queue_entry.HasTTH)
+                    SendCommand("ADCGET", "file TTH/" + queue_entry.TTH + " " + start_pos + " " + (queue_entry.Filesize - start_pos));
+                else SendCommand("ADCGET", "file " + source.Filename + " " + start_pos + " " + (queue_entry.Filesize - start_pos));
+                Console.WriteLine("Trying to adc-fetch file: '" + source.Filename + "' starting from pos:" + start_pos);
+            }
+            else
+            {
+                SendCommand("Get", source.Filename + "$" + start_pos);
+                Console.WriteLine("Trying to fetch file: '" + source.Filename + "' starting from pos:" + start_pos);
+            }
         }
 
         
@@ -444,7 +723,7 @@ namespace DCPlusPlus
                     parameter = received_command.Substring(command_end + 1);
                     parameters = parameter.Split(" ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
                 }
-                //Console.WriteLine("Command: '" + command + "' ,Parameter(" + parameters.Length + "): '" + parameter + "'");
+                Console.WriteLine("Command: '" + command + "' ,Parameter(" + parameters.Length + "): '" + parameter + "'");
 
                 switch (command)
                 {
@@ -456,12 +735,12 @@ namespace DCPlusPlus
                         else his_direction_wish = ConnectionDirection.Download;
                         DecideDirection();
                         break;
+
                     case "MyNick":
                         peer_nick = parameters[0];
                         //Console.WriteLine("peer nick: "+peer_nick);
                         //handshake complete
                         break;
-
 
                     case "Supports":
                         //Console.WriteLine("Supports command received: " + parameter);
@@ -472,29 +751,125 @@ namespace DCPlusPlus
                         error_code = ErrorCodes.NoFreeSlots;
                         Disconnect();
                         break;
+                    case "Error":
+                        error_code = ErrorCodes.NoErrorYet;
+                        if (parameter == "File not found" || parameter == "File Not Available")
+                            error_code = ErrorCodes.FileNotAvailable;
+                        Disconnect();
+                        break;
 
                     case "GetListLen":
                         //Console.WriteLine("GetListLen command received: " + parameter);
                         break;
+                    //TODO check for correct direction ..else skip ,same for startdownload
+                    case "ADCGET":
                     case "Get":
-                        Console.WriteLine("Get command received: " + parameter);
+                        if (command == "ADCGET")
+                        {
+                            Console.WriteLine("ADCGET command received: " + parameter);
+                            upload_request_filename = parameters[1];
+                            try
+                            {
+                                upload_offset = long.Parse(parameters[2]);
+                                upload_length = long.Parse(parameters[3]);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("error parsing offsets: " + ex.Message);
+                            }
+                        }else if (command == "Get")
+                        {
+                            Console.WriteLine("Get command received: " + parameter);
+                            int offset_start = parameter.LastIndexOf("$");
+                            if (offset_start == -1)
+                                break; //no offset given skip this request
+                            long offset = 1;
+                            string filename = parameter.Substring(0, offset_start);
+                            try
+                            {
+                                offset = long.Parse(parameter.Substring(offset_start + 1));
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("error parsing offset: " + ex.Message);
+                            }
+                            upload_request_filename = filename;
+                            upload_offset = offset - 1; //we want to send the first byte too , right ?
+                            upload_length = -1;
+                        }
+                        FileRequestAnswer answer = FileRequestAnswer.FileNotAvailable;
+                        if (upload_request_filename == "MyList.DcLst" || upload_request_filename == "MyList.bz2")
+                        {//not supported right now,maybe never
+                            SendFileNotAvailableError();
+                            error_code = ErrorCodes.FileNotAvailable;
+                            Disconnect();
+                        }
+                        else if (upload_request_filename == "files.xml.bz2")
+                        {
+                            if (FileListRequestReceived != null)
+                                answer = FileListRequestReceived(this);
+                        }
+                        else
+                        {
+                            if (FileRequestReceived != null)
+                                answer = FileRequestReceived(this);
+                        }
+                        //give back answer and maybe disconnect if needed or start upload
+
+                        if (answer == FileRequestAnswer.LetsGo)
+                        {
+                            Console.WriteLine("Ok lets go , upload something.");
+                            if (!StartUpload())
+                            {
+                                Console.WriteLine("Upload starting failed.Disconnecting...");
+                                Disconnect();
+                            }
+                        }
+                        else if(answer == FileRequestAnswer.FileNotAvailable)
+                        {
+                            Console.WriteLine("Sorry file not found replied.");
+                            SendFileNotAvailableError();
+                            Disconnect();
+                        }
+                        else if (answer == FileRequestAnswer.NoFreeSlots)
+                        {
+                            Console.WriteLine("Sorry no free slot for you.");
+                            SendMaxedOut();
+                            Disconnect();
+                        }
                         break;
+
                     case "Send":
                         Console.WriteLine("Send command received: " + parameter);
+                        StartUploadTransfer();
                         break;
+
+                    case "ADCSND":
+                        Console.WriteLine("ADCSEND command received: " + parameter);
+                        try
+                        {
+                            long temp_upload_offset = long.Parse(parameters[2]);
+                            long temp_upload_length = long.Parse(parameters[3]);
+                            if (queue_entry.Type == Queue.QueueEntry.EntryType.File && (temp_upload_length + temp_upload_offset) != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
+                            if (queue_entry.Type == Queue.QueueEntry.EntryType.FileList)
+                                queue_entry.Filesize = temp_upload_offset + temp_upload_length;
+                        }
+                        catch (Exception ex) { Console.WriteLine("Error parsing file length: " + ex.Message); }
+                        StartDownloadTransfer();
+                        break;
+                        
+
                     case "FileLength":
-                        //Console.WriteLine("FileLength command received: "+parameter);
-                        try 
-                        { 
+                        Console.WriteLine("FileLength command received: "+parameter);
+                        try
+                        {
                             long filelength = long.Parse(parameters[0]);
                             if (queue_entry.Type == Queue.QueueEntry.EntryType.File && filelength != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
                             if (queue_entry.Type == Queue.QueueEntry.EntryType.FileList)
                                 queue_entry.Filesize = filelength;
                         }
                         catch (Exception ex) { Console.WriteLine("Error parsing file length: " + ex.Message); }
-                        is_transfering = true;
-                        start_tick = System.Environment.TickCount;
-                        bytes_downloaded = 0;
+                        StartDownloadTransfer();
                         break;
 
                     case "Key":
@@ -535,7 +910,7 @@ namespace DCPlusPlus
                             {
                                 is_extended_protocol = true;
                                 //Console.WriteLine("Peer is using the dc++ protocol enhancements.");
-                                SendCommand("Supports", "MiniSlots XmlBZList ");
+                                SendCommand("Supports", "MiniSlots XmlBZList TTHF ADCGet");
                                 //SendCommand("Supports", "MiniSlots XmlBZList ADCGet TTHL TTHF GetZBlock ZLIG ");
                                 //SendCommand("Supports", "MiniSlots XmlBZList TTHL TTHF GetZBlock ZLIG ");
                                 //SendCommand("Supports", "BZList TTHL TTHF GetZBlock´ZLIG ");
@@ -557,6 +932,7 @@ namespace DCPlusPlus
 
                         }
                         break;
+
                     default:
                         Console.WriteLine("Unknown Command received: " + command + ", Parameter: " + parameter);
                         break;

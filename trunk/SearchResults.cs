@@ -121,7 +121,6 @@ namespace DCPlusPlus
                         if (third_block_tokens[0].StartsWith("TTH:"))
                         {
                             tth = third_block_tokens[0].Substring(4);
-                            has_tth = true;
                         }
                         else
                         {
@@ -129,7 +128,6 @@ namespace DCPlusPlus
                             for (int i = 0; i < third_block_tokens.Length - 2; i++)
                                 hub_name += third_block_tokens[i] + " ";
                             hub_name.TrimEnd();//kill the last whitespace added - Maybe this will not give a correct hubname... for instance hub names using double whitespaces
-                            has_tth = false;
                         }
 
                         if (third_block_tokens[third_block_tokens.Length - 1].StartsWith("(") && third_block_tokens[third_block_tokens.Length - 1].EndsWith(")"))
@@ -155,7 +153,6 @@ namespace DCPlusPlus
                         if (second_block_tokens[0].StartsWith("TTH:"))
                         {
                             tth = second_block_tokens[0].Substring(4);
-                            has_tth = true;
                         }
                         else
                         {
@@ -163,7 +160,6 @@ namespace DCPlusPlus
                             for (int i = 0; i < second_block_tokens.Length - 2; i++)
                                 hub_name += second_block_tokens[i] + " ";
                             hub_name.TrimEnd();//kill the last whitespace added
-                            has_tth = false;
                         }
                         if (second_block_tokens[second_block_tokens.Length - 1].StartsWith("(") && second_block_tokens[second_block_tokens.Length - 1].EndsWith(")"))
                         {
@@ -291,16 +287,15 @@ namespace DCPlusPlus
                 }
             }
 
-            protected bool has_tth=false;
             public bool HasTTH
             {
                 get
                 {
-                    return (has_tth);
+                    return (!string.IsNullOrEmpty(tth));
                 }
             }
-         
-            protected string tth="";
+
+            protected string tth = "";
             public string TTH
             {
                 get

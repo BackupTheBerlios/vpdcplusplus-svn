@@ -82,7 +82,7 @@ namespace DCPlusPlus
                 connected_hubs_lock = value;
             }
         }
-        protected List<Hub> connected_hubs= new List<Hub>();
+        protected List<Hub> connected_hubs = new List<Hub>();
         public List<Hub> ConnectedHubs
         {
             get
@@ -158,7 +158,7 @@ namespace DCPlusPlus
             }
         }
 
-        protected string  name = "c#++";
+        protected string name = "c#++";
         public string Name
         {
             get
@@ -184,7 +184,7 @@ namespace DCPlusPlus
             }
         }
 
-        protected long share_size =0;
+        protected long share_size = 0;
         public long ShareSize
         {
             get
@@ -210,8 +210,8 @@ namespace DCPlusPlus
                 }
             }
         }
-        
-        public void Search(string search_string,bool size_restricted,bool is_max_size,int size,Hub.SearchFileType file_type)
+
+        public void Search(string search_string, bool size_restricted, bool is_max_size, int size, Hub.SearchFileType file_type)
         {
             search_results.SearchTerm = search_string;
             lock (connected_hubs_lock)
@@ -224,7 +224,7 @@ namespace DCPlusPlus
             }
         }
 
-        public void Search(string search_tth,bool is_tth)
+        public void Search(string search_tth, bool is_tth)
         {
             if (!is_tth) //better to catch this case ... in case someone is using it 
                 Search(search_tth);
@@ -255,12 +255,12 @@ namespace DCPlusPlus
             result.Hub = ResolveHub(result.HubAddress);
             if (result.Hub != null) //only add results for hubs still connected
             {
-                if (result.HasTTH) 
+                if (result.HasTTH)
                 {//only if a result has a tth it is considered a source for some queue entry
                     Queue.QueueEntry entry = download_queue.FindQueueEntryByTTH(result.TTH);
                     if (entry != null)
                     {//this searchresult is also a source for a queue entry 
-                     //,instead using of giving it back as result we add it to the source pool of the queue entry
+                        //,instead using of giving it back as result we add it to the source pool of the queue entry
                         entry.AddSource(new Queue.QueueEntry.Source(result.UserName, result.Filename, result.Hub));
 
                     } //no queue entry found for this one just hand it over to SearchResults
@@ -279,10 +279,10 @@ namespace DCPlusPlus
 
         public void GetFileList(Hub hub, string username)
         {
-            download_queue.AddFileList(hub,username);
+            download_queue.AddFileList(hub, username);
             hub.SendConnectToMe(username); //signal download to hub to start it
         }
-                
+
         public void StartDownload(SearchResults.SearchResult result)
         {
             if (result.IsHubResolved)
@@ -343,7 +343,7 @@ namespace DCPlusPlus
 
         private Hub ResolveHub(string hub_address)
         {
-            int port=411;
+            int port = 411;
             string address = "";
             try
             {
@@ -351,10 +351,10 @@ namespace DCPlusPlus
                 if (port_start != -1)
                 {
                     address = hub_address.Substring(0, port_start);
-                    port = int.Parse(hub_address.Substring(port_start+1));
+                    port = int.Parse(hub_address.Substring(port_start + 1));
                 }
                 else address = hub_address;
-                
+
             }
             catch (Exception ex)
             {
@@ -363,15 +363,15 @@ namespace DCPlusPlus
             }
 
             //Console.WriteLine("Searching hubs for ip: "+address + " ,port: "+port);
-            lock(connected_hubs_lock)
+            lock (connected_hubs_lock)
             {
-            foreach (Hub hub in connected_hubs)
-            {
-                if (hub.IP == address && hub.Port == port)
+                foreach (Hub hub in connected_hubs)
                 {
-                    return (hub);
+                    if (hub.IP == address && hub.Port == port)
+                    {
+                        return (hub);
+                    }
                 }
-            }
 
             }
 
@@ -385,7 +385,7 @@ namespace DCPlusPlus
             return (null);
         }
 
-        private void UpdateSourcesByUsername(string username, Hub source_hub,bool is_online)
+        private void UpdateSourcesByUsername(string username, Hub source_hub, bool is_online)
         {
             download_queue.UpdateSourcesByUsername(username, source_hub, is_online);
         }
@@ -393,7 +393,7 @@ namespace DCPlusPlus
         private void UpdateSourcesByHub(Hub me, bool is_online)
         {
             foreach (string username in me.UserList)
-                UpdateSourcesByUsername(username,me, is_online);
+                UpdateSourcesByUsername(username, me, is_online);
         }
 
 
@@ -448,9 +448,9 @@ namespace DCPlusPlus
 
         private void SetupPeerEventHandler(Peer client)
         {
-                            client.Nick = nick;
-                client.DataReceived += delegate(Peer data_received_client)
-                {/*
+            client.Nick = nick;
+            client.DataReceived += delegate(Peer data_received_client)
+            {/*
                     Queue.QueueEntry entry = download_queue.FindFirstUnusedQueueEntryBySourceUser(data_received_client.PeerNick);
                     if (entry != null)
                     {
@@ -472,68 +472,89 @@ namespace DCPlusPlus
                     }
                     */
 
-                    if (PeerDataReceived != null)
-                        PeerDataReceived(data_received_client);
-                };
+                if (PeerDataReceived != null)
+                    PeerDataReceived(data_received_client);
+            };
 
-                client.HandShakeCompleted += delegate(Peer handshake_client)
+            client.FileListRequestReceived += delegate(Peer file_list_request_client)
+            {
+                if (file_list_request_client.UploadRequestFilename == "files.xml.bz2")
+                    file_list_request_client.UploadFilename = file_list_request_client.UploadRequestFilename;
+                file_list_request_client.UploadFileListData = shares.GetFileListXmlBZ2();
+
+                return (Peer.FileRequestAnswer.LetsGo);
+            };
+
+            client.FileRequestReceived += delegate(Peer file_request_client)
+            {
+                Sharing.SharingEntry entry = shares.GetShareByFileRequest(file_request_client.UploadRequestFilename);
+                if(entry!=null) 
                 {
-                    if (PeerHandShakeCompleted != null)
-                        PeerHandShakeCompleted(handshake_client);
-                    Queue.QueueEntry entry = download_queue.FindFirstUnusedQueueEntryBySourceUser(handshake_client.PeerNick);
-                    if (entry != null)
+                    file_request_client.UploadFilename = entry.Filename;
+                   return (Peer.FileRequestAnswer.LetsGo);
+                }
+                else return (Peer.FileRequestAnswer.FileNotAvailable);
+    
+            };
+
+            client.HandShakeCompleted += delegate(Peer handshake_client)
+            {
+                if (PeerHandShakeCompleted != null)
+                    PeerHandShakeCompleted(handshake_client);
+                Queue.QueueEntry entry = download_queue.FindFirstUnusedQueueEntryBySourceUser(handshake_client.PeerNick);
+                if (entry != null)
+                {
+                    Queue.QueueEntry.Source source = entry.FindFirstSourceByUser(handshake_client.PeerNick);
+                    if (source != null)
                     {
-                        Queue.QueueEntry.Source source = entry.FindFirstSourceByUser(handshake_client.PeerNick);
-                        if (source != null)
-                        {
-                            //entry.IsInUse = true;
-                            //handshake_client.StartDownload(source.Filename, entry.OutputFilename, entry.Filesize);
-                            if (entry.Type == Queue.QueueEntry.EntryType.File)
-                                handshake_client.StartDownload(source, entry);
-                            else if (entry.Type == Queue.QueueEntry.EntryType.FileList)
-                                handshake_client.GetFileList(entry);
-                            if (DownloadStarted != null)
-                                DownloadStarted(handshake_client);
-                        }
-                        else
-                        {
-                            Console.WriteLine("no correct source found in queue entry for user: " + handshake_client.PeerNick);
-                        }
+                        //entry.IsInUse = true;
+                        //handshake_client.StartDownload(source.Filename, entry.OutputFilename, entry.Filesize);
+                        if (entry.Type == Queue.QueueEntry.EntryType.File)
+                            handshake_client.StartDownload(source, entry);
+                        else if (entry.Type == Queue.QueueEntry.EntryType.FileList)
+                            handshake_client.GetFileList(entry);
+                        if (DownloadStarted != null)
+                            DownloadStarted(handshake_client);
                     }
                     else
                     {
-                        if (handshake_client.Direction == Peer.ConnectionDirection.Download)
-                        {
-                            Console.WriteLine("nothing found in queue for user: " + handshake_client.PeerNick);
-                            handshake_client.Disconnect();
-                        }
+                        Console.WriteLine("no correct source found in queue entry for user: " + handshake_client.PeerNick);
                     }
-                };
-
-
-                client.Completed += delegate(Peer completed_client)
+                }
+                else
                 {
-                    //download_queue.Remove(download_queue.FindQueueEntryByOutputFilename(completed_client.OutputFilename));
-                    download_queue.Remove(completed_client.QueueEntry);
-                    ContinueWithQueueForUser(completed_client.PeerNick);
-                    if (PeerCompleted != null)
-                        PeerCompleted(completed_client);
-                };
-    
-                client.Disconnected += delegate(Peer disconnected_client)
-                {
-                    lock (peers_lock)
+                    if (handshake_client.Direction == Peer.ConnectionDirection.Download)
                     {
-                        peers.Remove(disconnected_client);
+                        Console.WriteLine("nothing found in queue for user: " + handshake_client.PeerNick);
+                        handshake_client.Disconnect();
                     }
-                    //Queue.QueueEntry entry = download_queue.FindQueueEntryByOutputFilename(disconnected_client.OutputFilename);
-                    //Queue.QueueEntry entry = disconnected_client.QueueEntry;
-                    //if (entry != null) //TODO this will cause trouble -> fix with disconnect cause change in callback
-                    //    entry.IsInUse = false;
-                    //ContinueWithQueueForUser(disconnected_client.PeerNick);//TODO prevent hammering on strange source with a seconds counter
-                    if (PeerDisconnected != null)
-                        PeerDisconnected(disconnected_client);
-                };
+                }
+            };
+
+
+            client.Completed += delegate(Peer completed_client)
+            {
+                //download_queue.Remove(download_queue.FindQueueEntryByOutputFilename(completed_client.OutputFilename));
+                download_queue.Remove(completed_client.QueueEntry);
+                ContinueWithQueueForUser(completed_client.PeerNick);
+                if (PeerCompleted != null)
+                    PeerCompleted(completed_client);
+            };
+
+            client.Disconnected += delegate(Peer disconnected_client)
+            {
+                lock (peers_lock)
+                {
+                    peers.Remove(disconnected_client);
+                }
+                //Queue.QueueEntry entry = download_queue.FindQueueEntryByOutputFilename(disconnected_client.OutputFilename);
+                //Queue.QueueEntry entry = disconnected_client.QueueEntry;
+                //if (entry != null) //TODO this will cause trouble -> fix with disconnect cause change in callback
+                //    entry.IsInUse = false;
+                //ContinueWithQueueForUser(disconnected_client.PeerNick);//TODO prevent hammering on strange source with a seconds counter
+                if (PeerDisconnected != null)
+                    PeerDisconnected(disconnected_client);
+            };
         }
 
 
@@ -541,7 +562,7 @@ namespace DCPlusPlus
         {
 
             search_results.DiscardOldResults = true;
-        
+
             local_peer.SearchResultReceived += delegate(SearchResults.SearchResult result)
                 {
                     InterpretReceivedSearchResult(result);
@@ -569,7 +590,7 @@ namespace DCPlusPlus
         ~Client()
         {
             //local_peer.Close();
-            
+
         }
 
 
@@ -587,92 +608,110 @@ namespace DCPlusPlus
             me.MyConnectionMode = connection_mode;
             me.MyConnectionSpeed = connection_speed;
             me.MyName = name;
-            
-            if(!me.IsGrabbedByClient) 
+
+            if (!me.IsGrabbedByClient)
             {
-            me.SearchResultReceived += delegate(Hub search_hub, SearchResults.SearchResult result)
+                me.SearchReceived += delegate(Hub search_hub, Hub.SearchParameters search)
                 {
-                    InterpretReceivedSearchResult(result);
-                };
-            me.MainChatLineReceived += delegate(Hub chat_hub, Hub.ChatLine chat_line)
-            {
-                if (HubMainChatReceived != null)
-                    HubMainChatReceived(chat_hub, chat_line);
-            };
-            me.MoveForced += delegate(Hub src_hub, Hub dst_hub)
-            {
-                if (HubMoveForced != null)
-                    HubMoveForced(src_hub, dst_hub);
-            };
-            me.ConnectToMeReceived += delegate(Hub hub, Peer connect_to_me_client)
-            {
-                //free slots check maybe needed
-                SetupPeerEventHandler(connect_to_me_client);
-                connect_to_me_client.Connected += delegate(Peer connect_to_me_connected_client)
-                {
-                    if (PeerConnected != null)
-                        PeerConnected(connect_to_me_connected_client);
-                    connect_to_me_connected_client.StartHandShake();
-                    lock (peers_lock)
+                    if (search.HasTTH)
                     {
-                        peers.Add(connect_to_me_connected_client);
+                        Sharing.SharingEntry entry = shares.GetShareByTTH(search.tth);
+                        if (entry != null)
+                        {
+                            if (search.mode == Hub.ConnectionMode.Passive)
+                                search_hub.SearchReply(entry.Filename,entry.Filesize, search);
+                            else local_peer.SearchReply(entry.Filename,entry.Filesize,search_hub, search);
+                        }
                     }
+                    else
+                    {
+
+                    }
+
                 };
-                connect_to_me_client.Connect();
+                me.SearchResultReceived += delegate(Hub search_result_hub, SearchResults.SearchResult result)
+                    {
+                        InterpretReceivedSearchResult(result);
+                    };
+                me.MainChatLineReceived += delegate(Hub chat_hub, Hub.ChatLine chat_line)
+                {
+                    if (HubMainChatReceived != null)
+                        HubMainChatReceived(chat_hub, chat_line);
+                };
+                me.MoveForced += delegate(Hub src_hub, Hub dst_hub)
+                {
+                    if (HubMoveForced != null)
+                        HubMoveForced(src_hub, dst_hub);
+                };
+                me.ConnectToMeReceived += delegate(Hub hub, Peer connect_to_me_client)
+                {
+                    //free slots check maybe needed
+                    SetupPeerEventHandler(connect_to_me_client);
+                    connect_to_me_client.Connected += delegate(Peer connect_to_me_connected_client)
+                    {
+                        if (PeerConnected != null)
+                            PeerConnected(connect_to_me_connected_client);
+                        connect_to_me_connected_client.StartHandShake();
+                        lock (peers_lock)
+                        {
+                            peers.Add(connect_to_me_connected_client);
+                        }
+                    };
+                    connect_to_me_client.Connect();
 
-            };
-            me.Disconnected += delegate(Hub hub)
-            {
-                UpdateSourcesByHub(hub, false);
-                lock (connected_hubs_lock)
+                };
+                me.Disconnected += delegate(Hub hub)
                 {
-                    if (connected_hubs.Contains(hub))
-                        connected_hubs.Remove(hub);
-                }
-                if (HubDisconnected != null)
-                    HubDisconnected(hub);
-            };
-            me.Connected += delegate(Hub hub)
-            {
-                lock (connected_hubs_lock)
+                    UpdateSourcesByHub(hub, false);
+                    lock (connected_hubs_lock)
+                    {
+                        if (connected_hubs.Contains(hub))
+                            connected_hubs.Remove(hub);
+                    }
+                    if (HubDisconnected != null)
+                        HubDisconnected(hub);
+                };
+                me.Connected += delegate(Hub hub)
                 {
-                    if (!connected_hubs.Contains(hub))
-                        connected_hubs.Add(hub);
-                }
-                if (HubConnected != null)
-                    HubConnected(hub);
-            };
-            me.UnableToConnect += delegate(Hub hub)
-            {
-                UpdateSourcesByHub(hub, false);
-                lock (connected_hubs_lock)
+                    lock (connected_hubs_lock)
+                    {
+                        if (!connected_hubs.Contains(hub))
+                            connected_hubs.Add(hub);
+                    }
+                    if (HubConnected != null)
+                        HubConnected(hub);
+                };
+                me.UnableToConnect += delegate(Hub hub)
                 {
-                    if (connected_hubs.Contains(hub))
-                        connected_hubs.Remove(hub);
-                }
-                if (HubUnableToConnect != null)
-                    HubUnableToConnect(hub);
-            };
-            me.LoggedIn += delegate(Hub hub)
-            {
-                if (HubLoggedIn != null)
-                    HubLoggedIn(hub);
-            };
-            me.UserJoined += delegate(Hub hub, string username)
-            {
-                UpdateSourcesByUsername(username,hub, true);
-                if (HubUserJoined != null)
-                    HubUserJoined(hub, username);
-            };
-            me.UserQuit += delegate(Hub hub, string username)
-            {
-                UpdateSourcesByUsername(username,hub, false);
-                if (HubUserQuit != null)
-                    HubUserQuit(hub, username);
-            };
+                    UpdateSourcesByHub(hub, false);
+                    lock (connected_hubs_lock)
+                    {
+                        if (connected_hubs.Contains(hub))
+                            connected_hubs.Remove(hub);
+                    }
+                    if (HubUnableToConnect != null)
+                        HubUnableToConnect(hub);
+                };
+                me.LoggedIn += delegate(Hub hub)
+                {
+                    if (HubLoggedIn != null)
+                        HubLoggedIn(hub);
+                };
+                me.UserJoined += delegate(Hub hub, string username)
+                {
+                    UpdateSourcesByUsername(username, hub, true);
+                    if (HubUserJoined != null)
+                        HubUserJoined(hub, username);
+                };
+                me.UserQuit += delegate(Hub hub, string username)
+                {
+                    UpdateSourcesByUsername(username, hub, false);
+                    if (HubUserQuit != null)
+                        HubUserQuit(hub, username);
+                };
 
-            me.IsGrabbedByClient = true;
-        }
+                me.IsGrabbedByClient = true;
+            }
             me.Connect();
         }
 

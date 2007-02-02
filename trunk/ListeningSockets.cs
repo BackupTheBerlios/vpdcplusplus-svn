@@ -391,5 +391,42 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Accept on tcp socket aborted.");
         }
+
+        public void SearchReply(string result_name,long filesize,Hub hub, Hub.SearchParameters search)
+        {
+            try
+            {
+            string temp_hub = hub.Name;
+            if (search.HasTTH) temp_hub = "TTH:" + search.tth;
+            string reply = "$SR " + hub.Nick + " " + result_name + (char)0x05 + filesize + " 1/1" + (char)0x05 + temp_hub + " (" + hub.IP + ":" + hub.Port + ")|";
+            Console.WriteLine("Replying to active search: " + reply);
+            IPEndPoint udp_reply_endpoint = new IPEndPoint(IPAddress.Parse(search.ip), search.port);
+            //EndPoint temp_receive_from_endpoint = (EndPoint)receive_from_endpoint;
+            
+            byte[] send_bytes = System.Text.Encoding.Default.GetBytes(reply);
+            udp_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None,udp_reply_endpoint, new AsyncCallback(SearchReplyCallback), udp_socket);
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("Exception during sending of SearchReply to: "+search.ip+":"+search.port+" : "+ex.Message);
+            }
+        }
+
+        protected void SearchReplyCallback(IAsyncResult ar)
+        {
+            Socket search_reply_socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = search_reply_socket.EndSend(ar);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of SearchReply: " + ex.Message);
+            }
+        }
+
+
+
     }
 }

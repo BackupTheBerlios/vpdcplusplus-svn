@@ -81,9 +81,9 @@ namespace ThexCS
 				OpenFile();
 				Initialize();
 				SplitFile();
-				Console.WriteLine("starting to get TTH: " + DateTime.Now.ToString());
+				//Console.WriteLine("starting to get TTH: " + DateTime.Now.ToString());
 				StartThreads();
-				Console.WriteLine("finished to get TTH: " + DateTime.Now.ToString());
+				//Console.WriteLine("finished to get TTH: " + DateTime.Now.ToString());
 				GC.Collect();
 				CompressTree();
 /*			}

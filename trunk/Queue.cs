@@ -79,10 +79,48 @@ namespace DCPlusPlus
                 {
                     get
                     {
-                        if (hub!=null) return (true);
+                        if (hub != null) return (true);
                         else return (false);
                     }
                 }
+                /*
+                protected string ip = "";
+                [XmlIgnoreAttribute]
+                public Hub IP
+                {
+                    get
+                    {
+                        return (ip);
+                    }
+                    set
+                    {
+                        ip = value;
+                    }
+                }
+                protected int port = "";
+                [XmlIgnoreAttribute]
+                public Hub Port
+                {
+                    get
+                    {
+                        return (port);
+                    }
+                    set
+                    {
+                        port = value;
+                    }
+                }
+                public bool HasAddress
+                {
+                    get
+                    {
+                        if (!string.IsNullOrEmpty(ip)) return (true);
+                        else return (false);
+                    }
+                }
+                */
+
+
 
                 public Source()
                 {

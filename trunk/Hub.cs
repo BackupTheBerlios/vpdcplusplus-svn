@@ -7,13 +7,83 @@ using System.Net.Sockets;
 using System.IO;
 using NUnit.Framework;
 
+
+/*
+  TODO 
+ * add OnCommandHandler which apps can overwrite and if they dont want to act on a certain command
+ * it calls DefaultCommandHandler
+ * 
+ */
+
 namespace DCPlusPlus
 {
     [TestFixture]
     public class Hub : Connection
     {
-        public delegate void SearchResultEventHandler(Hub hub,SearchResults.SearchResult result);
+        public delegate void SearchResultEventHandler(Hub hub, SearchResults.SearchResult result);
         public event SearchResultEventHandler SearchResultReceived;
+
+
+        public class FileParameters
+        {
+            public string filename;
+            public long filesize;
+        }
+
+        public class SearchParameters
+        {
+            public ConnectionMode mode;
+            public string search_string;
+            public bool size_restricted;
+            public bool is_max_size;
+            public long size;
+            public SearchFileType file_type;
+            public string ip;
+            public int port;
+            public string username;
+            public bool HasTTH
+            {
+                get
+                {
+                    return (!string.IsNullOrEmpty(tth));
+                }
+            }
+            public string tth = "";
+
+            public SearchParameters()
+            {
+            }
+            public SearchParameters(ConnectionMode mode, string search_string, bool size_restricted, bool is_max_size, int size, SearchFileType file_type,string tth, string ip, int port)
+            {
+                this.mode = ConnectionMode.Active;
+                this.search_string = search_string;
+                this.size_restricted = size_restricted;
+                this.is_max_size = is_max_size;
+                this.size = size;
+                this.file_type = file_type;
+                this.ip = ip;
+                this.port = port;
+                this.username = "";
+                this.tth = tth;
+            }
+            public SearchParameters(string search_string, bool size_restricted, bool is_max_size, int size, SearchFileType file_type, string tth,string username)
+            {
+                this.mode = ConnectionMode.Passive;
+                this.search_string = search_string;
+                this.size_restricted = size_restricted;
+                this.is_max_size = is_max_size;
+                this.size = size;
+                this.file_type = file_type;
+                this.ip = "";
+                this.port = 0;
+                this.tth = tth;
+                this.username = username;
+            }
+
+        }
+        
+        public delegate void SearchEventHandler(Hub hub,SearchParameters search);
+        public event SearchEventHandler SearchReceived;
 
         public delegate void MainChatLineReceivedEventHandler(Hub hub, ChatLine line);
         public event MainChatLineReceivedEventHandler MainChatLineReceived;
@@ -754,7 +824,7 @@ namespace DCPlusPlus
             Search(search_string,false,false,0,SearchFileType.any);
         }
 
-        public void Search(string search_string, bool size_restricted, bool is_max_size, int size, SearchFileType file_type)
+        public void Search(string search_string, bool size_restricted, bool is_max_size, long size, SearchFileType file_type)
         {
             //"Search Hub:[DE]Test F?F?0?1?extras"
             //string send_string = "<" + nick + "> " + message + "|";
@@ -776,7 +846,7 @@ namespace DCPlusPlus
             
             parameter += size.ToString()+"?";
             parameter += ((int)file_type).ToString()+"?";
-            parameter += search_string;
+            parameter += search_string.Replace(' ','$');
             SendCommand("Search",parameter);
         }
 
@@ -790,6 +860,19 @@ namespace DCPlusPlus
             }
         }
 
+        public void SearchReply(string result_name,long filesize, SearchParameters search)
+        {
+            if (search.mode == ConnectionMode.Passive)
+            {
+                string temp_hub = name;
+                if (search.HasTTH) temp_hub = "TTH:" + search.tth;
+                string reply_parameter = nick + " " + result_name + (char)0x05 + filesize + " 1/1" + (char)0x05 + temp_hub + " (" + ip + ":" + port + ")" + (char)0x05 + search.username;
+                Console.WriteLine("Replying to passive search: " + reply_parameter);
+                SendCommand("SR", reply_parameter);
+            } 
+        }
+
+        
         public void GetUserInfo(string user)
         {//TODO finish this 
         
@@ -997,7 +1080,57 @@ namespace DCPlusPlus
                         break;
 
                     case "Search":
+                        Console.WriteLine("Search Command received: "+parameter);
+                        SearchParameters search = new SearchParameters();
+                        if(parameters[0].StartsWith("Hub:"))
+                        {
+                            search.mode = ConnectionMode.Passive;
+                            int username_start = parameters[0].IndexOf(":");
+                            if (username_start == -1 || username_start + 1 > parameters[0].Length) break;
+                            search.username = parameters[0].Substring(username_start + 1);
+                        }
+                        else
+                        {
+                            search.mode = ConnectionMode.Active;
+                            int port_start = parameters[0].IndexOf(":");
+                            if (port_start == -1 || port_start + 1 > parameters[0].Length) break;
+                            search.ip = parameters[0].Substring(0,port_start);
+                            try
+                            {
+                                search.port = int.Parse(parameters[0].Substring(port_start + 1));
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("error parsing port in search: " + ex.Message);
+                                break;
+                            }
+                        }
 
+                        char[] seps ={ '?' };
+                        string[] search_parameters = parameters[1].Split(seps,StringSplitOptions.RemoveEmptyEntries);
+                        if (search_parameters.Length < 4) break;
+                        if (search_parameters[0] == "F")
+                            search.size_restricted = false;
+                        else search.size_restricted = true;
+                        if (search_parameters[1] == "F")
+                            search.is_max_size = false;
+                        else search.is_max_size = true;
+                        try
+                        {
+                            search.size = long.Parse(search_parameters[2]);
+                            search.file_type = (SearchFileType)int.Parse(search_parameters[3]);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("error parsing ints in search: " + ex.Message);
+                            break;
+                        }
+                        if (search_parameters[4].StartsWith("TTH:") && search.file_type == SearchFileType.tth)
+                            search.tth = search_parameters[4].Substring(4);
+                        else search.search_string = search_parameters[4];
+
+                        if (SearchReceived != null)
+                            SearchReceived(this,search);
                         break;
 
                     case "Supports":
@@ -1221,6 +1354,7 @@ namespace DCPlusPlus
             Console.WriteLine("Local Hub Connect Test successful.");
         }
         #endregion
+
 
 
     }
