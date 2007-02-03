@@ -30,8 +30,6 @@ namespace DCPlusPlus
                 return (peers);
             }
         }
-
-
         //private Object download_queue_lock = "";
         protected Queue download_queue = new Queue();
         public Queue DownloadQueue
@@ -41,7 +39,6 @@ namespace DCPlusPlus
                 return (download_queue);
             }
         }
-
         protected SearchResults search_results = new SearchResults();
         public SearchResults SearchResults
         {
@@ -50,7 +47,6 @@ namespace DCPlusPlus
                 return (search_results);
             }
         }
-
         protected ListeningSockets local_peer = new ListeningSockets();
         public ListeningSockets LocalPeer
         {
@@ -59,7 +55,6 @@ namespace DCPlusPlus
                 return (local_peer);
             }
         }
-
         protected Sharing shares = new Sharing();
         public Sharing Shares
         {
@@ -68,8 +63,6 @@ namespace DCPlusPlus
                 return (shares);
             }
         }
-
-
         protected Object connected_hubs_lock = "";
         public Object ConnectedHubsLock
         {
@@ -90,7 +83,6 @@ namespace DCPlusPlus
                 return (connected_hubs);
             }
         }
-
         protected string nick = "unknown";
         public string Nick
         {
@@ -103,7 +95,6 @@ namespace DCPlusPlus
                 nick = value;
             }
         }
-
         protected string connection_speed = "unknown";
         public string ConnectionSpeed
         {
@@ -117,7 +108,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected Hub.ConnectionMode connection_mode = Hub.ConnectionMode.Passive;
         public Hub.ConnectionMode ConnectionMode
         {
@@ -131,7 +121,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected string version = "1,0091";
         public string Version
         {
@@ -144,7 +133,6 @@ namespace DCPlusPlus
                 version = value;
             }
         }
-
         protected string tag_version = "0.698";
         public string TagVersion
         {
@@ -157,7 +145,6 @@ namespace DCPlusPlus
                 tag_version = value;
             }
         }
-
         protected string name = "c#++";
         public string Name
         {
@@ -170,7 +157,6 @@ namespace DCPlusPlus
                 name = value;
             }
         }
-
         protected string email = "unknown@unknown.net";
         public string Email
         {
@@ -183,7 +169,6 @@ namespace DCPlusPlus
                 email = value;
             }
         }
-
         protected long share_size = 0;
         public long ShareSize
         {
@@ -196,7 +181,6 @@ namespace DCPlusPlus
                 share_size = value;
             }
         }
-
         public void Search(string search_string)
         {
 
@@ -210,7 +194,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         public void Search(string search_string, bool size_restricted, bool is_max_size, int size, Hub.SearchFileType file_type)
         {
             search_results.SearchTerm = search_string;
@@ -223,7 +206,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         public void Search(string search_tth, bool is_tth)
         {
             if (!is_tth) //better to catch this case ... in case someone is using it 
@@ -240,15 +222,12 @@ namespace DCPlusPlus
                 }
             }
         }
-
         public void FindAlternateSources(Queue.QueueEntry me)
         {
             //search all hubs for tth string
             if (me != null && me.HasTTH)
                 Search(me.TTH, true);
         }
-
-
         private void InterpretReceivedSearchResult(SearchResults.SearchResult result)
         {
             //Console.WriteLine("Adding Result to SearchResults");
@@ -275,14 +254,11 @@ namespace DCPlusPlus
                     search_results.AddResult(result);
             */
         }
-
-
         public void GetFileList(Hub hub, string username)
         {
             download_queue.AddFileList(hub, username);
             hub.SendConnectToMe(username); //signal download to hub to start it
         }
-
         public void StartDownload(SearchResults.SearchResult result)
         {
             if (result.IsHubResolved)
@@ -292,7 +268,6 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Hub was not resolved from result hub address: " + result.HubAddress);
         }
-
         public void StartDownload(Queue.QueueEntry.Source source)
         {
             if (source == null) return;
@@ -302,7 +277,6 @@ namespace DCPlusPlus
                 source.Hub.SendConnectToMe(source.UserName); //signal download to hub to start it
             }
         }
-
         public void StartDownload(Queue.QueueEntry me)
         {
             if (me == null) return;
@@ -323,7 +297,6 @@ namespace DCPlusPlus
             //result.Hub.SendCommand("ConnectToMe", result.UserName); //signal download to hub to start it
             //Console.WriteLine("Hub was not resolved from result hub address: " + result.HubAddress);
         }
-
         public void UpdateConnectionSettings()
         {
             local_peer.UpdateConnectionSettings();
@@ -340,7 +313,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         private Hub ResolveHub(string hub_address)
         {
             int port = 411;
@@ -379,24 +351,19 @@ namespace DCPlusPlus
 
             return (null);
         }
-
         public Hub FindUserHub(string username)
         {
             return (null);
         }
-
         private void UpdateSourcesByUsername(string username, Hub source_hub, bool is_online)
         {
             download_queue.UpdateSourcesByUsername(username, source_hub, is_online);
         }
-
         private void UpdateSourcesByHub(Hub me, bool is_online)
         {
             foreach (string username in me.UserList)
                 UpdateSourcesByUsername(username, me, is_online);
         }
-
-
         private bool CheckForUserInPeers(string username)
         { //TODO save originating hub in peer and check for hub/username combination
             lock (peers_lock)
@@ -408,8 +375,6 @@ namespace DCPlusPlus
             }
             return (false);
         }
-
-
         private void ContinueWithQueueForUser(string username)
         {
             //check for existing connection in peers for this user
@@ -421,17 +386,14 @@ namespace DCPlusPlus
                 StartDownload(entry.FindFirstSourceByUser(username));
             }
         }
-
         public string GetClientDirectory()
         {
             return (Path.GetDirectoryName(Assembly.GetExecutingAssembly().GetModules()[0].FullyQualifiedName));
         }
-
         //deprecated
         public delegate void DownloadStartedEventHandler(Peer peer);
         public event DownloadStartedEventHandler DownloadStarted;
-
-
+        //delete above soon
         public event Peer.ConnectedEventHandler PeerConnected;
         public event Peer.DisconnectedEventHandler PeerDisconnected;
         public event Peer.HandShakeCompletedEventHandler PeerHandShakeCompleted;
@@ -445,7 +407,7 @@ namespace DCPlusPlus
         public event Hub.ConnectedEventHandler HubConnected;
         public event Hub.MoveForcedEventHandler HubMoveForced;
         public event Hub.MainChatLineReceivedEventHandler HubMainChatReceived;
-
+        public event Hub.MainChatLineReceivedEventHandler HubPrivateChatReceived;
         private void SetupPeerEventHandler(Peer client)
         {
             client.Nick = nick;
@@ -556,8 +518,6 @@ namespace DCPlusPlus
                     PeerDisconnected(disconnected_client);
             };
         }
-
-
         public Client()
         {
 
@@ -584,16 +544,13 @@ namespace DCPlusPlus
             download_queue.FileListsDirectory = GetClientDirectory() + "\\filelists";
             download_queue.DownloadDirectory = GetClientDirectory() + "\\downloads";
             share_size = 901 * 1024 * 1024;
-            share_size = share_size * 1024; // until we support sharing .this is just fake to get in to the nicer hubs
+            share_size = share_size * 1024+523; // until we support sharing .this is just fake to get in to the nicer hubs
         }
-
         ~Client()
         {
             //local_peer.Close();
 
         }
-
-
         public void ConnectHub(Hub me)
         {
             me.Nick = nick;
@@ -633,10 +590,15 @@ namespace DCPlusPlus
                     {
                         InterpretReceivedSearchResult(result);
                     };
-                me.MainChatLineReceived += delegate(Hub chat_hub, Hub.ChatLine chat_line)
+                me.MainChatLineReceived += delegate(Hub main_chat_hub, Hub.ChatLine main_chat_line)
                 {
                     if (HubMainChatReceived != null)
-                        HubMainChatReceived(chat_hub, chat_line);
+                        HubMainChatReceived(main_chat_hub, main_chat_line);
+                };
+                me.PrivateChatLineReceived += delegate(Hub private_chat_hub, Hub.ChatLine private_chat_line)
+                {
+                    if (HubPrivateChatReceived != null)
+                        HubPrivateChatReceived(private_chat_hub, private_chat_line);
                 };
                 me.MoveForced += delegate(Hub src_hub, Hub dst_hub)
                 {
@@ -714,7 +676,6 @@ namespace DCPlusPlus
             }
             me.Connect();
         }
-
         public void DisconnectHub(Hub me)
         {
             lock (connected_hubs_lock)
@@ -724,6 +685,5 @@ namespace DCPlusPlus
             me.Disconnect();
 
         }
-
     }
 }

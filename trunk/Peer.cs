@@ -13,35 +13,24 @@ namespace DCPlusPlus
     {
         public delegate void ConnectedEventHandler(Peer peer);
         public event ConnectedEventHandler Connected;
-
         public delegate void DisconnectedEventHandler(Peer peer);
         public event DisconnectedEventHandler Disconnected;
-
         public delegate void UnableToConnectEventHandler(Hub hub);
         public event UnableToConnectEventHandler UnableToConnect;
-
         public delegate void HandShakeCompletedEventHandler(Peer peer);
         public event HandShakeCompletedEventHandler HandShakeCompleted;
-
         public delegate void CompletedEventHandler(Peer peer);
         public event CompletedEventHandler Completed;
-
         public delegate void DataReceivedEventHandler(Peer peer);
         public event DataReceivedEventHandler DataReceived;
-
-
         public enum FileRequestAnswer
         {
             FileNotAvailable,NoFreeSlots,LetsGo
         }
-
         public delegate FileRequestAnswer FileRequestReceivedEventHandler(Peer peer);
         public event FileRequestReceivedEventHandler FileRequestReceived;
-
         public delegate FileRequestAnswer FileListRequestReceivedEventHandler(Peer peer);
         public event FileListRequestReceivedEventHandler FileListRequestReceived;
-      
-
         protected string peer_nick = "unknown";
         public string PeerNick
         {
@@ -54,7 +43,6 @@ namespace DCPlusPlus
                 peer_nick = value;
             }
         }
-
         private void StartReceiving()
         {
             try
@@ -64,20 +52,23 @@ namespace DCPlusPlus
                     AsyncCallback event_receive = new AsyncCallback(OnReceive);
                     socket.BeginReceive(receive_buffer, 0, receive_buffer.Length, SocketFlags.None, event_receive, socket);
                 }
-                else Console.WriteLine("Connection to peer aborted.");
+                else
+                {
+                    Console.WriteLine("Connection to peer aborted.");
+                    Disconnect();
+                }
 
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Error during connect to peer: "+ex.Message);
+                Disconnect();
             }
 
         }
-
         private int start_tick = 0;
         //private FileStream file_stream=null;
         private Stream stream=null;
-
         protected long bytes_already_downloaded = 0;
         public long BytesAlreadyDownloaded
         {
@@ -86,7 +77,6 @@ namespace DCPlusPlus
                 return (bytes_already_downloaded);
             }
         }
-
         protected long bytes_downloaded = 0;
         public long BytesDownloaded
         {
@@ -95,8 +85,6 @@ namespace DCPlusPlus
                 return (bytes_downloaded);
             }
         }
-
-
         protected long bytes_already_uploaded = 0;
         public long BytesAlreadyUploaded
         {
@@ -105,7 +93,6 @@ namespace DCPlusPlus
                 return (bytes_already_uploaded);
             }
         }
-
         protected long bytes_uploaded = 0;
         public long BytesUploaded
         {
@@ -114,8 +101,6 @@ namespace DCPlusPlus
                 return (bytes_uploaded);
             }
         }
-
-
         protected float speed = 0;
         public float Speed
         {
@@ -123,7 +108,6 @@ namespace DCPlusPlus
                 return (speed);
             }
         }
-
         protected ConnectionDirection direction = ConnectionDirection.Unknown;
         public ConnectionDirection Direction
         {
@@ -132,7 +116,6 @@ namespace DCPlusPlus
                 return (direction);
             }
         }
-
         protected bool is_downloading = false;
         public bool IsDownloading
         {
@@ -141,7 +124,6 @@ namespace DCPlusPlus
                 return (is_downloading);
             }
         }
-
         protected bool is_uploading = false;
         public bool IsUploading
         {
@@ -150,8 +132,6 @@ namespace DCPlusPlus
                 return (is_uploading);
             }
         }
-
-
         protected Queue.QueueEntry queue_entry = new Queue.QueueEntry();
         public Queue.QueueEntry QueueEntry
         {
@@ -160,7 +140,6 @@ namespace DCPlusPlus
                 return (queue_entry);
             }
         }
-
         protected Queue.QueueEntry.Source source = new Queue.QueueEntry.Source();
         public Queue.QueueEntry.Source Source
         {
@@ -169,8 +148,6 @@ namespace DCPlusPlus
                 return (source);
             }
         }
-
-
         protected long upload_offset = 0;
         public long UploadOffset
         {
@@ -179,7 +156,6 @@ namespace DCPlusPlus
                 return (upload_offset);
             }
         }
-
         protected long upload_length = 0;
         public long UploadLength
         {
@@ -188,8 +164,6 @@ namespace DCPlusPlus
                 return (upload_length);
             }
         }
-
-
         protected string upload_request_filename="";
         public string UploadRequestFilename
         {
@@ -198,7 +172,6 @@ namespace DCPlusPlus
                 return (upload_request_filename);
             }
         }
-
         protected string upload_filename="";
         public string UploadFilename
         {
@@ -211,7 +184,6 @@ namespace DCPlusPlus
                 upload_filename = value;
             }
         }
-
         protected byte[] upload_file_list_data=null;
         public byte[] UploadFileListData
         {
@@ -224,13 +196,7 @@ namespace DCPlusPlus
                 upload_file_list_data = value;
             }
         }
-
-
-
-
         private bool first_bytes_received = false;
-
-
         //handshake randoms for priority selection
         private int handshake_my_value = 0;
         private int handshake_his_value = 0;
@@ -269,7 +235,109 @@ namespace DCPlusPlus
         }
         */
         //protected string input_filename="";
+        private void OnReceive(IAsyncResult result)
+        {
+            try
+            {
+                Socket receive_socket = (Socket)result.AsyncState;
+                if (!receive_socket.Connected)
+                {
+                    if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
+                    {
+                        if (Completed != null)
+                            Completed(this);
+                        if (stream == null)
+                            stream.Close();
+                        return;
+                    }
+                    if (first_bytes_received)//we need to unclaim our used entry too
+                        queue_entry.IsInUse = false;
+                    Console.WriteLine("Connection to peer dropped.");
+                    /*if (Disconnected != null)
+                        Disconnected(this);*/
+                    Disconnect();
+                }
+                int received_bytes = receive_socket.EndReceive(result);
+                if (received_bytes > 0)
+                {
+                    if (is_downloading)
+                    {
+                        if (!first_bytes_received)
+                        {
+                            if (queue_entry.TryToClaimEntry()) //TODO -> this can be moved to client with an event handler (FirstBytesReceived(this);)
+                            {
+                                first_bytes_received = true;
+                            }
+                            else
+                            {
+                                Console.WriteLine("Queue Entry already in use , disconnecting.");
+                                error_code = ErrorCodes.QueueEntryInUse;
+                                Disconnect();
+                            }
+                        }
+                        bytes_downloaded += received_bytes;
+                        //TODO quite buggy divide by zero prob
+                        speed = (float)(((float)bytes_downloaded / 1024.0f) / ((float)(System.Environment.TickCount - start_tick) / 1000.0f));
+                        //Console.WriteLine("Received " + received_bytes + " bytes of data. with a speed of: " + (((System.Environment.TickCount - start_tick) / 1000) / (bytes_downloaded / 1024)) + " KB/s");
+                        if (stream == null) //if we do not append we still have to create the output file
+                            stream = new FileStream(queue_entry.OutputFilename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
+                        stream.Write(receive_buffer, 0, received_bytes);
+                        stream.Flush();
+                        if (DataReceived != null)
+                            DataReceived(this);
+                        if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
+                        {
+                            if (Completed != null)
+                                Completed(this);
+                            if (!CheckForExtension("ADCGet"))
+                                SendCommand("Send");
+                            Disconnect();
+                        }
+                    }
+                    else
+                    {
+                        string received_string = System.Text.Encoding.Default.GetString(receive_buffer, 0, received_bytes);
+                        //Console.WriteLine("Received a string: "+received_string);
+                        InterpretReceivedString(received_string);//interpret string and act accordingly
+                    }
+                    AsyncCallback event_receive = new AsyncCallback(OnReceive);
+                    receive_socket.BeginReceive(receive_buffer, 0, receive_buffer.Length, SocketFlags.None, event_receive, receive_socket);
+                }
+                else
+                {
+                    if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
+                    {
+                        if (Completed != null)
+                            Completed(this);
+                        if (stream == null) 
+                            stream.Close();
+                        return;
+                    }
+                    if (first_bytes_received) //we need to unclaim our used entry too
+                        queue_entry.IsInUse = false;
+                    Console.WriteLine("Connection to peer dropped.");
+                    Disconnect();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception during receive of data: " + ex.Message);
+                if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
+                {
+                    if (Completed != null)
+                        Completed(this);
+                    if (stream == null) 
+                        stream.Close();
+                    return;
+                }
+                if (first_bytes_received)
+                    queue_entry.IsInUse = false;
+                Console.WriteLine("Error receiving data from Peer: " + ex.Message);
+                Disconnect();
+            }
 
+        }
+        /*
         private void OnReceive(IAsyncResult result)
         {
             Socket receive_socket = (Socket)result.AsyncState;
@@ -279,7 +347,7 @@ namespace DCPlusPlus
                 {
                     try
                     {
-                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
+                        if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
                         {
                             try
                             {
@@ -314,7 +382,7 @@ namespace DCPlusPlus
                     {
                         if (!first_bytes_received)
                         {
-                            if(queue_entry.TryToClaimEntry())
+                            if (queue_entry.TryToClaimEntry())
                             {
                                 first_bytes_received = true;
                             }
@@ -343,7 +411,7 @@ namespace DCPlusPlus
                             Console.WriteLine("Exception in DataReceived Event: " + ex.Message);
                         }
 
-                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
+                        if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
                         {
                             try
                             {
@@ -354,7 +422,7 @@ namespace DCPlusPlus
                             {
                                 Console.WriteLine("Exception in Completed Event: " + ex.Message);
                             }
-                            if(!CheckForExtension("ADCGet"))
+                            if (!CheckForExtension("ADCGet"))
                                 SendCommand("Send");
                             Disconnect();
                         }
@@ -375,7 +443,7 @@ namespace DCPlusPlus
                 {
                     try
                     {
-                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
+                        if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
                         {
                             try
                             {
@@ -406,44 +474,42 @@ namespace DCPlusPlus
             }
             catch (Exception ex)
             {
-                    try
+                try
+                {
+                    if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
                     {
-                        if (queue_entry.Filesize > 0 && bytes_downloaded+bytes_already_downloaded == queue_entry.Filesize)
+                        try
                         {
-                            try
-                            {
-                                if (Completed != null)
-                                    Completed(this);
-                                return;
-                            }
-                            catch (Exception ex2)
-                            {
-                                Console.WriteLine("Exception in Completed Event: " + ex2.Message);
-                            }
+                            if (Completed != null)
+                                Completed(this);
+                            return;
                         }
-                        if (first_bytes_received)
-                            queue_entry.IsInUse = false;
-                        Console.WriteLine("Error receiving data from Peer: " + ex.Message);
-                        if (Disconnected != null)
-                            Disconnected(this);
+                        catch (Exception ex2)
+                        {
+                            Console.WriteLine("Exception in Completed Event: " + ex2.Message);
+                        }
+                    }
+                    if (first_bytes_received)
+                        queue_entry.IsInUse = false;
+                    Console.WriteLine("Error receiving data from Peer: " + ex.Message);
+                    if (Disconnected != null)
+                        Disconnected(this);
 
-                    }
-                    catch (Exception ex2)
-                    {
-                        Console.WriteLine("Exception in Disconnected Event: " + ex2.Message);
-                    }
-                
+                }
+                catch (Exception ex2)
+                {
+                    Console.WriteLine("Exception in Disconnected Event: " + ex2.Message);
+                }
+
             }
 
         }
-
+*/
         public enum ConnectionDirection
         {
             //Incoming,Outgoing
             Upload,Download,Unknown
         }
-
-
         public void GetFileList(Queue.QueueEntry entry)
         {//try to download a filelist that the peer offers by his supports
             //it would be fine to have these converted on the spot to our standard filelist format (files.xml.bz2)
@@ -477,28 +543,22 @@ namespace DCPlusPlus
             }
 
         }
-
         public void SendMaxedOut()
         {
             SendCommand("MaxedOut");
         }
-
         public void SendFileNotAvailableError()
         {
             SendError("File Not Available");
         }
-
         public void SendError(string message)
         {
             SendCommand("Error", message);
         }
-
         public void SendFailed(string message)
         {
             SendCommand("Failed",message);
         }
-
-
         public bool StartUpload()
         {
             direction = ConnectionDirection.Upload; //TODO enhance Direction handling -> esp uploading if we have nothing to to download from the user
@@ -563,9 +623,7 @@ namespace DCPlusPlus
             }
             return (false);
         }
-
         private long upload_block_size = 1024;
-
         public void StartUploadTransfer()
         {
             is_uploading = true;
@@ -590,8 +648,6 @@ namespace DCPlusPlus
             }
 
         }
-
-
         protected void UploadTransferCallback(IAsyncResult ar)
         {
             Socket upload_data_socket = (Socket)ar.AsyncState;
@@ -623,10 +679,6 @@ namespace DCPlusPlus
                 Console.WriteLine("exception during sending of data: " + ex.Message);
             }
         }
-
-
-
-
         public void StartDownloadTransfer()
         {
             is_downloading = true;
@@ -637,7 +689,6 @@ namespace DCPlusPlus
                 SendCommand("Send");
             }
         }
-
         public void StartDownload()
         {
             direction = ConnectionDirection.Download;
@@ -670,16 +721,12 @@ namespace DCPlusPlus
                 Console.WriteLine("Trying to fetch file: '" + source.Filename + "' starting from pos:" + start_pos);
             }
         }
-
-        
         public void StartDownload(Queue.QueueEntry.Source source, Queue.QueueEntry entry)
         {
             this.queue_entry = entry;
             this.source = source;
             StartDownload();
         }
-                
-        
         public void StartDownload(string filename, string output_filename,long output_file_length)
         {
             //this.output_filename = output_filename;
@@ -691,7 +738,6 @@ namespace DCPlusPlus
             source.Filename = filename;
             StartDownload();
         }
-        
         private void InterpretReceivedString(string received_string)
         {
             // possible strings
@@ -706,7 +752,6 @@ namespace DCPlusPlus
             }
 
         }
-
         private void InterpretCommand(string received_command)
         {
             int command_end = received_command.IndexOf(" ");
@@ -940,7 +985,6 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Error interpreting command: " + received_command);
         }
-
         private void DecideDirection()
         {
             if (direction == ConnectionDirection.Unknown && his_direction_wish!=ConnectionDirection.Unknown)
@@ -962,7 +1006,6 @@ namespace DCPlusPlus
 
             }
         }
-
         public Peer(Socket client,string nick)
         {
             this.nick = nick;
@@ -970,19 +1013,16 @@ namespace DCPlusPlus
             StartReceiving();
             //StartHandShake();
         }
-
         public Peer(Socket client)
         {
             this.socket = client;
             StartReceiving();
         }
-
         public Peer(string dst_ip, int dst_port)
         {
             ip = dst_ip;
             port = dst_port;
         }
-
         public Peer(string address)
         {
             string tmp = address;
@@ -1005,15 +1045,12 @@ namespace DCPlusPlus
             }
             ip = tmp; //ip or adress property?
         }
-
         public Peer()
         {
             ip = "";
             port = 0;
             socket = null;
         }
-
-
         public void StartHandShake()
         {
             SendCommand("MyNick",nick);
@@ -1021,30 +1058,24 @@ namespace DCPlusPlus
             //Console.WriteLine("sending lock: '"+key+"'");
             SendCommand("Lock",key);
         }
-
         public void Disconnect()
         {
+            if (stream != null)
+            {
+                stream.Close();
+            }
             if (socket != null)
             {
                 if (socket.Connected)
                 {
-                    try{
-                    if (Disconnected != null)
-                        Disconnected(this);
-
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Exception in Disconnected Event: " + ex.Message);
-                }
-
                     this.socket.Close();
                 }
                 else Console.WriteLine("This peer is already disconnected");
+                if (Disconnected != null)
+                    Disconnected(this);
             }
             else Console.WriteLine("This socket is unused -> no disconnect needed.");
         }
-
         public void Connect()
         {
             if (!is_connected)
@@ -1069,14 +1100,12 @@ namespace DCPlusPlus
             }
 
         }
-
         public void ConnectTo(string dst_ip,int dst_port)
         {
             ip = dst_ip;
             port = dst_port;
             Connect();
         }
-
         private void OnConnect(IAsyncResult result)
         {
             Socket connect_socket = (Socket)result.AsyncState;
@@ -1119,6 +1148,5 @@ namespace DCPlusPlus
 
 
         }
-
     }
 }

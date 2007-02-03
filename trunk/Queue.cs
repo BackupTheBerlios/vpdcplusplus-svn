@@ -119,19 +119,14 @@ namespace DCPlusPlus
                     }
                 }
                 */
-
-
-
                 public Source()
                 {
                 }
-
                 public Source(string user_name, string filename)
                 {
                     this.user_name = user_name;
                     this.filename = filename;
                 }
-
                 public Source(string user_name, string filename,Hub source_hub)
                 {
                     this.hub = source_hub;
@@ -140,7 +135,6 @@ namespace DCPlusPlus
                     this.filename = filename;
                 }
             }
-
             protected Object sources_lock = "";
             [XmlIgnoreAttribute]
             public Object SourcesLock
@@ -154,7 +148,6 @@ namespace DCPlusPlus
                     sources_lock = value;
                 }
             }
-
             protected List<Source> sources = new List<Source>();
             public List<Source> Sources
             {
@@ -175,7 +168,6 @@ namespace DCPlusPlus
                     filesize = value;
                 }
             }
-
             //protected bool has_tth = false;
             public bool HasTTH
             {
@@ -186,7 +178,6 @@ namespace DCPlusPlus
                     //return (has_tth);
                 }
             }
-
             protected string tth = "";
             public string TTH
             {
@@ -199,7 +190,6 @@ namespace DCPlusPlus
                     tth = value;
                 }
             }
-
             protected string output_filename = "";
             public string OutputFilename
             {
@@ -212,7 +202,6 @@ namespace DCPlusPlus
                     output_filename = value;
                 }
             }
-
             public enum Priority
             {
                 higher,normal,lesser
@@ -230,7 +219,6 @@ namespace DCPlusPlus
 
                 }
             }
-
             public enum EntryType
             {
                 File,Directory,FileList
@@ -248,7 +236,6 @@ namespace DCPlusPlus
 
                 }
             }
-
             protected bool is_in_use = false;
             [XmlIgnoreAttribute]
             public bool IsInUse
@@ -268,7 +255,6 @@ namespace DCPlusPlus
                     }
                 }
             }
-
             public bool TryToClaimEntry()
             {
                 lock (sources_lock)
@@ -281,7 +267,6 @@ namespace DCPlusPlus
                     else return (false);
                     }
             }
-
             public Source FindFirstSourceByUser(string username)
             {
                 lock (sources_lock)
@@ -293,7 +278,6 @@ namespace DCPlusPlus
                 }
                 return (null);
             }
-
             public Source FindFirstSourceByUserAndHub(string username,Hub hub)
             {
                 lock (sources_lock)
@@ -305,7 +289,6 @@ namespace DCPlusPlus
                 }
                 return (null);
             }
-
             public bool AddSource(Source me)
             {
                 if (FindFirstSourceByUser(me.UserName) == null)
@@ -321,7 +304,6 @@ namespace DCPlusPlus
                     return (false);
                 }
             }
-
             public void RemoveSource(Source me)
             {
                 lock (sources_lock)
@@ -343,7 +325,6 @@ namespace DCPlusPlus
                 items = value;
             }
         }
-
         public int Count
         {
             get
@@ -351,7 +332,6 @@ namespace DCPlusPlus
                 return (items.Count);
             }
         }
-
         protected string download_directory = ".\\downloads";
         public string DownloadDirectory
         {
@@ -366,7 +346,6 @@ namespace DCPlusPlus
                     download_directory.TrimEnd('\\');
             }
         }
-
         protected string filelists_directory = ".\\downloads";
         public string FileListsDirectory
         {
@@ -381,7 +360,6 @@ namespace DCPlusPlus
                     filelists_directory.TrimEnd('\\');
             }
         }
-
         protected Object queue_lock = "";
         public Object QueueLock
         {
@@ -394,22 +372,16 @@ namespace DCPlusPlus
                 queue_lock = value;
             }
         }
-
         public delegate void EntryAddedEventHandler(QueueEntry entry);
         public event EntryAddedEventHandler EntryAdded;
-
         public delegate void EntryCompletedEventHandler(QueueEntry entry);
         public event EntryCompletedEventHandler EntryCompleted;
-
         public delegate void EntryRemovedEventHandler(QueueEntry entry);
         public event EntryRemovedEventHandler EntryRemoved;
-
         public delegate void EntriesChangedEventHandler();
         public event EntriesChangedEventHandler EntriesChanged;
-
         public delegate void EntriesClearedEventHandler();
         public event EntriesClearedEventHandler EntriesCleared;
-
         //deprecated , because automatic adding of sources should make this a never to be called again function
         public QueueEntry FindExistingEntryForSearchResult(SearchResults.SearchResult result)
         {
@@ -425,7 +397,6 @@ namespace DCPlusPlus
                 return (null);
             }
         }
-
         public QueueEntry FindExistingEntryForFileList(Hub hub,string username)
         {
             lock (queue_lock)
@@ -438,8 +409,6 @@ namespace DCPlusPlus
                 return (null);
             }
         }
-
-
         public void AddFileList(Hub hub,string username)
         {
                 QueueEntry existing = FindExistingEntryForFileList(hub,username);
@@ -468,10 +437,6 @@ namespace DCPlusPlus
 
                 }
         }
-   
-
-        
-        
         public void AddSearchResult(SearchResults.SearchResult result)
         {
             if (result.IsFile)
@@ -528,7 +493,6 @@ namespace DCPlusPlus
             //download_directory + "\\" + 
 
         }
-
         public Queue.QueueEntry FindFirstQueueEntryBySourceUser(string username)
         {
             lock (queue_lock)
@@ -544,7 +508,6 @@ namespace DCPlusPlus
                 return (null);
             }
         }
-
         public Queue.QueueEntry FindFirstUnusedQueueEntryBySourceUser(string username)
         {
             lock (queue_lock)
@@ -559,7 +522,6 @@ namespace DCPlusPlus
                 return (null);
             }
         }
-
         public Queue.QueueEntry FindQueueEntryByOutputFilename(string output_filename)
         {
             lock (queue_lock)
@@ -572,7 +534,6 @@ namespace DCPlusPlus
                 return (null);
             }
         }
-
         public Queue.QueueEntry FindQueueEntryByTTH(string tth)
         {
             lock (queue_lock)
@@ -584,7 +545,6 @@ namespace DCPlusPlus
                 return (null);
             }
         }
-
         public void UpdateSourcesByUsername(string username, Hub source_hub, bool is_online)
         {
             lock (queue_lock)
@@ -603,7 +563,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         public void Remove(string output_filename)
         {
             lock (queue_lock)
@@ -630,7 +589,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         public void LoadQueueFromXml(string xml)
         {
             lock (queue_lock)
@@ -664,7 +622,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         public string SaveQueueToXml()
         {
             //nice way but seems to not work with list<> members
@@ -688,7 +645,6 @@ namespace DCPlusPlus
                 return (ret);
             }              
         }
-
         public void LoadQueueFromXmlFile(string filename)
         {
             try
@@ -701,7 +657,6 @@ namespace DCPlusPlus
                 Console.WriteLine("Error loading queue from: " + filename + " : " + ex.Message);
             }
         }
-
         public void SaveQueueToXmlFile(string filename)
         {
             try
@@ -721,7 +676,6 @@ namespace DCPlusPlus
                 Console.WriteLine("Error saving queue to: " + filename + " : " + ex.Message);
             }
         }
-
 
         #region ICollection<QueueEntry> Members
 

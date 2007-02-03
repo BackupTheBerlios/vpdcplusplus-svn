@@ -7,6 +7,12 @@ using System.Net.Sockets;
 
 namespace DCPlusPlus
 {
+    /*
+     TODO
+     * allow to change the supports client will send back
+     * oncommandhandler etc
+     */
+
     public class Connection
     {
         protected bool is_extended_protocol = false;
@@ -18,7 +24,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected string nick = "unknown";
         public string Nick
         {
@@ -31,7 +36,6 @@ namespace DCPlusPlus
                 nick = value;
             }
         }
-
         protected bool is_connected = false;
         public bool IsConnected
         {
@@ -41,7 +45,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected string ip = "";
         public string IP
         {
@@ -54,7 +57,6 @@ namespace DCPlusPlus
                 ip = value;
             }
         }
-
         protected int port = 0;
         public int Port
         {
@@ -67,17 +69,12 @@ namespace DCPlusPlus
                 port = value;
             }
         }
-
-
-
         protected Socket socket = null;
         protected byte[] receive_buffer = new byte[32768];
-
         public void SendCommand(string command)
         {
             SendCommand(command, "");
         }
-
         public void SendCommand(string command, string parameter)
         {
             if (!string.IsNullOrEmpty(parameter))
@@ -85,7 +82,6 @@ namespace DCPlusPlus
             else
                 SendCommand(command, new string[0]);
         }
-
         public void SendCommand(string command, string[] parameters)
         {
             if (socket != null)
@@ -108,7 +104,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         protected void SendCommandCallback(IAsyncResult ar)
         {
             Socket send_command_socket = (Socket)ar.AsyncState;
@@ -121,7 +116,6 @@ namespace DCPlusPlus
                 Console.WriteLine("exception during send of command: " + ex.Message);
             }
         }
-
         protected string[] supports=new string[0];
         public string[] Supports
         {
@@ -130,7 +124,6 @@ namespace DCPlusPlus
                 return (supports);
             }
         }
-
         public bool CheckForExtension(string extension)
         {
             foreach (string supported_extension in supports)
@@ -140,17 +133,15 @@ namespace DCPlusPlus
             }
             return (false);
         }
-
-
         public enum ErrorCodes
         {
             UnableToConnect, Exception,UnknownException,NoFreeSlots,
             FileNotAvailable,Kicked,Banned,Disconnected,
             UnableToResolve,UrlNotFound,ProtocolError,
-            ConnectionTimedOut,UserDisconnect,NoErrorYet
+            ConnectionTimedOut,UserDisconnect,NoErrorYet,
+            QueueEntryInUse
 
         }
-
         protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
         public Connection.ErrorCodes ErrorCode
         {
@@ -159,8 +150,6 @@ namespace DCPlusPlus
                 return (error_code);
             }
         }
-
-
         #region LockToKey
 
 
@@ -428,7 +417,6 @@ namespace DCPlusPlus
             return (decoded_key);
         }
         #endregion
-
         protected string CreateKey(bool extended)
         {
             string key = "";

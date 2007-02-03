@@ -22,14 +22,11 @@ namespace DCPlusPlus
     {
         public delegate void SearchResultEventHandler(Hub hub, SearchResults.SearchResult result);
         public event SearchResultEventHandler SearchResultReceived;
-
-
         public class FileParameters
         {
             public string filename;
             public long filesize;
         }
-
         public class SearchParameters
         {
             public ConnectionMode mode;
@@ -81,38 +78,28 @@ namespace DCPlusPlus
             }
 
         }
-        
         public delegate void SearchEventHandler(Hub hub,SearchParameters search);
         public event SearchEventHandler SearchReceived;
-
         public delegate void MainChatLineReceivedEventHandler(Hub hub, ChatLine line);
         public event MainChatLineReceivedEventHandler MainChatLineReceived;
-
+        public delegate void PrivateChatLineReceivedEventHandler(Hub hub, ChatLine line);
+        public event PrivateChatLineReceivedEventHandler PrivateChatLineReceived;
         public delegate void UserQuitEventHandler(Hub hub, string username);
         public event UserQuitEventHandler UserQuit;
-
         public delegate void UserJoinedEventHandler(Hub hub, string username);
         public event UserJoinedEventHandler UserJoined;
-
         public delegate void LoggedInEventHandler(Hub hub);
         public event LoggedInEventHandler LoggedIn;
-
         public delegate void MoveForcedEventHandler(Hub src_hub, Hub dst_hub);
         public event MoveForcedEventHandler MoveForced;
-
         public delegate void ConnectToMeEventHandler(Hub hub, Peer connection);
         public event ConnectToMeEventHandler ConnectToMeReceived;
-
         public delegate void DisconnectedEventHandler(Hub hub);
         public event DisconnectedEventHandler Disconnected;
-
         public delegate void ConnectedEventHandler(Hub hub);
         public event ConnectedEventHandler Connected;
-
         public delegate void UnableToConnectEventHandler(Hub hub);
         public event UnableToConnectEventHandler UnableToConnect;
-
-      
         protected string name = "";
         public string Name
         {
@@ -125,7 +112,6 @@ namespace DCPlusPlus
                 name = value;
             }
         }
-
         protected string address = "";
         public string Address
         {
@@ -159,7 +145,6 @@ namespace DCPlusPlus
                 address = tmp;
             }
         }
-
         protected string description = "";
         public string Description
         {
@@ -172,7 +157,6 @@ namespace DCPlusPlus
                 description = value;
             }
         }
-
         protected string country = "";
         public string Country
         {
@@ -185,7 +169,6 @@ namespace DCPlusPlus
                 country = value;
             }
         }
-
          protected long users = 0;
         public long Users
         {
@@ -198,7 +181,6 @@ namespace DCPlusPlus
                 users = value;
             }
         }
-
         protected long shared = 0;
         public long Shared
         {
@@ -211,7 +193,6 @@ namespace DCPlusPlus
                 shared = value;
             }
         }
-
         protected long min_share = 0;
         public long MinShare
         {
@@ -224,7 +205,6 @@ namespace DCPlusPlus
                 min_share = value;
             }
         }
-
         protected int min_slots = 0;
         public int MinSlots
         {
@@ -237,7 +217,6 @@ namespace DCPlusPlus
                 min_slots = value;
             }
         }
-
         protected int max_hubs = 0;
         public int MaxHubs
         {
@@ -250,7 +229,6 @@ namespace DCPlusPlus
                 max_hubs = value;
             }
         }
-
         protected long max_users = 0;
         public long MaxUsers
         {
@@ -263,10 +241,7 @@ namespace DCPlusPlus
                 max_users = value;
             }
         }
-
-
         //TODO if nick differs and already loggedin send validatenick again to change nickname
-
         protected string topic = "";
         public string Topic
         {
@@ -276,8 +251,6 @@ namespace DCPlusPlus
             }
 
         }
-
-
         protected bool is_grabbed = false;
         public bool IsGrabbedByClient
         {
@@ -290,7 +263,6 @@ namespace DCPlusPlus
                 is_grabbed = value;
             }
         }
-
         protected bool is_logged_in= false;
         public bool IsLoggedIn
         {
@@ -300,7 +272,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected bool auto_reconnect = false;
         public bool AutoReconnect
         {
@@ -313,10 +284,7 @@ namespace DCPlusPlus
                 auto_reconnect = value;
             }
         }
-
         //TODO change to a userinfo holding class list instead of just the username
-
-
         protected int chat_history_max_length = 0;
         public int ChatHistoryMaxLength
         {
@@ -329,7 +297,6 @@ namespace DCPlusPlus
                 chat_history_max_length = value;
             }
         }
-
         public class ChatLine
         {
             public string username = "unknown";
@@ -340,8 +307,6 @@ namespace DCPlusPlus
                 this.message = message;
             }
         }
-
-
         protected List<ChatLine> chat_history = new List<ChatLine>();
         public List<ChatLine> ChatHistory
         {
@@ -354,8 +319,6 @@ namespace DCPlusPlus
                 chat_history = value;
             }
         }
-
-
         protected List<string> user_list = new List<string>();
         public List<string> UserList
         {
@@ -368,7 +331,6 @@ namespace DCPlusPlus
                 user_list = value;
             }
         }
-
         protected List<string> op_list = new List<string>();
         public List<string> OperatorList
         {
@@ -381,7 +343,6 @@ namespace DCPlusPlus
                 op_list = value;
             }
         }
-
         protected string my_ip = "";
         public string MyIP
         {
@@ -394,7 +355,6 @@ namespace DCPlusPlus
                 my_ip = value;
             }
         }
-
         protected string my_version = "1,0091";
         public string MyVersion
         {
@@ -407,7 +367,6 @@ namespace DCPlusPlus
                 my_version = value;
             }
         }
-
         protected string my_tag_version = "0.698";
         public string MyTagVersion
         {
@@ -420,7 +379,6 @@ namespace DCPlusPlus
                 my_tag_version = value;
             }
         }
-
         protected string my_name = "c#++";
         public string MyName
         {
@@ -433,7 +391,6 @@ namespace DCPlusPlus
                 my_name = value;
             }
         }
-
         protected string my_email = "unknown@unknown.net";
         public string MyEmail
         {
@@ -446,7 +403,6 @@ namespace DCPlusPlus
                 my_email = value;
             }
         }
-
         protected long my_share_size = 0;
         public long MyShareSize
         {
@@ -459,7 +415,6 @@ namespace DCPlusPlus
                 my_share_size = value;
             }
         }
-
         protected int my_tcp_port = 0;
         public int MyTcpPort
         {
@@ -472,7 +427,6 @@ namespace DCPlusPlus
                 my_tcp_port = value;
             }
         }
-
         protected int my_udp_port = 0;
         public int MyUdpPort
         {
@@ -486,7 +440,6 @@ namespace DCPlusPlus
             }
 
         }
-
         public enum ConnectionSpeed
         {
 
@@ -496,7 +449,6 @@ namespace DCPlusPlus
             
             //, LAN(T1), LAN(T3)
         }
-
         protected string my_connection_speed = "unknown";
         public string MyConnectionSpeed
         {
@@ -510,13 +462,11 @@ namespace DCPlusPlus
             }
 
         }
-
         public enum ConnectionMode
         {
             Active,Passive//,Socks5
         }
         //Socks5 is not implemented atm
-
         protected ConnectionMode my_connection_mode = ConnectionMode.Passive;
         public ConnectionMode MyConnectionMode
         {
@@ -530,7 +480,6 @@ namespace DCPlusPlus
             }
 
         }
-  
         public Hub()
         {
             is_connected = false;
@@ -540,13 +489,11 @@ namespace DCPlusPlus
             port = 411;
             //Disconnect();
         }
-
         public void Reconnect()
         {
             Disconnect();
             Connect();
         }
-        
         public void Disconnect()
         {
             try
@@ -587,7 +534,6 @@ namespace DCPlusPlus
             }
 
         }
-
         public void Connect()
         {
             if (!is_connected)
@@ -614,7 +560,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         private void OnHostResolve(IAsyncResult result)
         {
             Socket resolve_socket = (Socket)result.AsyncState;
@@ -667,9 +612,7 @@ namespace DCPlusPlus
 
 
         }
-
         //private IAsyncResult receive_operation = null;
-
         private void OnConnect(IAsyncResult result)
         {
             Socket connect_socket = (Socket)result.AsyncState;
@@ -715,9 +658,7 @@ namespace DCPlusPlus
 
 
         }
-
         //TODO counter possible packet splits in messages
-
         private void OnReceive(IAsyncResult result)
         {
             Socket receive_socket = (Socket)result.AsyncState;
@@ -772,7 +713,6 @@ namespace DCPlusPlus
             }
 
         }
-
         public void SendChatMessage(string message)
         {
 
@@ -790,7 +730,6 @@ namespace DCPlusPlus
                 Console.WriteLine("Error sending chat message to Hub: " + name + "(exception:" + e.Message + ")");
             }
         }
-
         private void SendChatMessageCallback(IAsyncResult ar)
         {
             Socket send_chat_message_socket = (Socket)ar.AsyncState;
@@ -803,27 +742,22 @@ namespace DCPlusPlus
                 Console.WriteLine("exception during send of chat: " + ex.Message);
             }
         }
-
         public void SendChatMessage(string message, string user)
         {
             SendCommand("To: " + user + " From: " + nick + " $<" + nick + "> " + message);
         }
-
         public void SendChatMessage(string message, string user,bool show_in_main_chat)
         {
             SendCommand("MCTo: " + user + " $" + nick + " " + message);
         }
-
         public enum SearchFileType
         {
             any = 1,audio = 2,compressed = 3 ,documents = 4,executables = 5,pictures = 6,video = 7,folders = 8,tth = 9
         }
-
         public void Search(string search_string)
         {
             Search(search_string,false,false,0,SearchFileType.any);
         }
-
         public void Search(string search_string, bool size_restricted, bool is_max_size, long size, SearchFileType file_type)
         {
             //"Search Hub:[DE]Test F?F?0?1?extras"
@@ -849,7 +783,6 @@ namespace DCPlusPlus
             parameter += search_string.Replace(' ','$');
             SendCommand("Search",parameter);
         }
-
         public void Search(string search_tth, bool is_tth)
         {
             if (!is_tth)
@@ -859,7 +792,6 @@ namespace DCPlusPlus
                 Search("TTH:" + search_tth,false,false,0,SearchFileType.tth);
             }
         }
-
         public void SearchReply(string result_name,long filesize, SearchParameters search)
         {
             if (search.mode == ConnectionMode.Passive)
@@ -871,26 +803,21 @@ namespace DCPlusPlus
                 SendCommand("SR", reply_parameter);
             } 
         }
-
-        
         public void GetUserInfo(string user)
         {//TODO finish this 
         
             SendCommand("GetInfo",user+" "+nick);
         }
-
         public void SendConnectToMe(string username)
         {
             if (my_connection_mode == ConnectionMode.Active)
                 SendCommand("ConnectToMe", username + " " + my_ip + ":" + my_tcp_port);
             else SendCommand("RevConnectToMe",nick + " " + username);
         }
-
         public void SendConnectToMeV2(string username)
         {
             SendCommand("ConnectToMe", nick + " " + username + " " + my_ip + ":" + my_tcp_port);
         }
-
         public void SendMyInfo()
         {
             string temp_connection_mode = "";
@@ -901,7 +828,6 @@ namespace DCPlusPlus
             //SendCommand("MyINFO", "$ALL " + parameters[0] + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:0/0/0,S:2>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
             SendCommand("MyINFO", "$ALL " + nick + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:0/0/0,S:2,O:0>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
         }
-
         private void AddChatToHistory(string username, string message)
         {
             if (chat_history_max_length != 0)
@@ -915,10 +841,42 @@ namespace DCPlusPlus
                 MainChatLineReceived(this,cline);
 
         }
-        
-        
+        private void UserListAdd(string username)
+        {
+            user_list.Add(username);
+            try
+            {
+                if (UserJoined != null)
+                    UserJoined(this, username);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception in UserJoined: " + ex.Message);
+            }
+        }
+        private void UserListRemove(string username)
+        {
+            user_list.Remove(username);
+            try
+            {
+                if (UserQuit != null)
+                    UserQuit(this, username);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception in UserJoined: " + ex.Message);
+            }
+        }
+        private void UserListClear()
+        {
+            if(user_list.Count>0)
+                foreach (string temp_user in user_list)
+                {
+                    UserListRemove(temp_user);
+                }
+            user_list.Clear();
+        }
         private string received_string_buffer = "";
-
         private void InterpretReceivedString(string received_string)
         {
             // possible strings
@@ -960,7 +918,6 @@ namespace DCPlusPlus
             }
          
         }
-
         private void InterpretCommand(string received_command)
         {
             int command_end = received_command.IndexOf(" ");
@@ -1009,16 +966,30 @@ namespace DCPlusPlus
                         else
                         {//new user announced by server
                             //Console.WriteLine("User "+parameters[0]+" has joined Hub: "+name);
-                            user_list.Add(parameters[0]);
-                            try
-                            {
-                                if (UserJoined != null)
-                                    UserJoined(this, parameters[0]);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine("Exception in UserJoined: " + ex.Message);
-                            }
+                            UserListAdd(parameters[0]);
+                        }
+                        break;
+
+                    case "Quit":
+                        //Console.WriteLine("User "+parameters[0]+" has left Hub: "+name);
+                        UserListRemove(parameters[0]);
+                        break;
+
+                    case "NickList":
+                        UserListClear();
+                        string[] temp_users = parameters[0].Split("$$".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                        foreach (string temp_user in temp_users)
+                        {
+                            UserListAdd(temp_user);
+                        }
+                        break;
+
+                    case "OpList":
+                        op_list.Clear();
+                        string[] temp_ops = parameters[0].Split("$$".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                        foreach (string temp_op in temp_ops)
+                        {
+                            op_list.Add(temp_op);
                         }
                         break;
 
@@ -1049,26 +1020,6 @@ namespace DCPlusPlus
                         SendConnectToMe(parameters[0]);
                         break;
 
-                    case "NickList":
-                        user_list.Clear();
-                        string[] temp_users = parameters[0].Split("$$".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-                        foreach (string temp_user in temp_users)
-                        {
-                            user_list.Add(temp_user);
-                            if (UserJoined != null)
-                                UserJoined(this, temp_user);
-                        }
-                        break;
-
-                    case "OpList":
-                        op_list.Clear();
-                        string[] temp_ops = parameters[0].Split("$$".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-                        foreach (string temp_op in temp_ops)
-                        {
-                            op_list.Add(temp_op);
-                        }
-                        break;
-
                     case "HubTopic":
                         //topic = parameters[0];
                         topic = parameter;
@@ -1080,7 +1031,7 @@ namespace DCPlusPlus
                         break;
 
                     case "Search":
-                        Console.WriteLine("Search Command received: "+parameter);
+                        //Console.WriteLine("Search Command received: "+parameter);
                         SearchParameters search = new SearchParameters();
                         if(parameters[0].StartsWith("Hub:"))
                         {
@@ -1138,14 +1089,30 @@ namespace DCPlusPlus
                         break;
 
                     case "UserIP":
+                        break;
 
+                    case "MCTo:":
+                        string mcto_username = parameters[1].Substring(1); //to skip the leading $
+                        int mcto_message_start = parameters[0].Length + parameters[1].Length + 2;
+                        if (mcto_message_start < parameter.Length)
+                        {
+                            string mcto_message = parameter.Substring(mcto_message_start);
+                            AddChatToHistory(mcto_username, mcto_message);
+                        }
                         break;
 
                     case "To:":
-
+                        //Console.WriteLine("Private Message received: " + parameter);
+                        string to_username = parameters[2];
+                        int to_message_start = parameters[0].Length + parameters[1].Length + parameters[2].Length + parameters[3].Length + 4;
+                        if (to_message_start < parameter.Length )
+                        {
+                            string to_message = parameter.Substring(to_message_start);
+                            ChatLine to_message_line = new ChatLine(to_username, to_message);
+                            if (PrivateChatLineReceived != null)
+                                PrivateChatLineReceived(this, to_message_line);
+                        }
                         break;
-
-
 
                     case "SR":
                         //Console.WriteLine("Search result received: " + parameter);
@@ -1167,6 +1134,7 @@ namespace DCPlusPlus
                         //what the hell is this and who forgot to take some english lessons ?
                         break;
                     case "MyINFO":
+                        break;
                     case "GetPass":
                         break;
 
@@ -1190,24 +1158,7 @@ namespace DCPlusPlus
                         Console.WriteLine("Hub: " + name + " is full.");
                         Disconnect();
                         break;
-
-
-                    case "Quit":
-                        //Console.WriteLine("User "+parameters[0]+" has left Hub: "+name);
-                        user_list.Remove(parameters[0]);
-                        try
-                        {
-                            if (UserQuit != null)
-                                UserQuit(this, parameters[0]);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("Exception in UserJoined: " + ex.Message);
-                        }
-
-                        break;
-
-                    
+                  
                     case "Lock" :
                         //Console.WriteLine("Lock Command received: "+parameter);
                         //int key_end = parameter.IndexOf(" ");
@@ -1242,7 +1193,6 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Error interpreting command: " + received_command);
         }
-
         public Hub Copy()
         {
             Hub ret = new Hub();
@@ -1288,7 +1238,6 @@ namespace DCPlusPlus
             ret.users = 0;
             return (ret);
         }
-
         public void Ungrab()
         {
             Connected = null;
@@ -1300,9 +1249,6 @@ namespace DCPlusPlus
             UserQuit = null;
             MoveForced = null;
         }
-
-
-
         #region Unit Testing
         [Test]
         public void TestLocalHubConnect()
@@ -1354,8 +1300,5 @@ namespace DCPlusPlus
             Console.WriteLine("Local Hub Connect Test successful.");
         }
         #endregion
-
-
-
     }
 }

@@ -210,7 +210,6 @@ namespace DCPlusPlus
         }
 
         // share files with these functions
-
         public void ShareFile(string filename)
         {
             ShareFileHandler sfh = new ShareFileHandler(ShareFileAsync);
@@ -221,7 +220,6 @@ namespace DCPlusPlus
             ShareDirectoryHandler sdh = new ShareDirectoryHandler(ShareDirectoryAsync);
             IAsyncResult result = sdh.BeginInvoke(directory, new AsyncCallback(ShareDirectoryFinished), sdh);
         }
-
 
         public SharingEntry GetShareByFileRequest(string file_request)
         {
@@ -241,8 +239,6 @@ namespace DCPlusPlus
             return (null);
 
         }
-
-        
         //TODO make these both functions async too (via handler in parameters)
         public SharingEntry GetShareByFilename(string filename)
         {
@@ -387,13 +383,11 @@ namespace DCPlusPlus
             }
         }
 
-
         //string file_list
 
         public void UpdateFileLists()
         {
         }
-
         protected string cid = "D2QLOGUYDX3QA";
         public string CID
         {
@@ -406,7 +400,6 @@ namespace DCPlusPlus
                 cid = value;
             }
         }
-
         protected string generator = "vpDcPlusPlus 0.2";
         public string Generator
         {
@@ -419,16 +412,13 @@ namespace DCPlusPlus
                 generator = value;
             }
         }
-
         public class DirectoryContents
         {
             public string directory_name = "";
             public List<SharingEntry> files = new List<SharingEntry>();
             public List<DirectoryContents> directories = new List<DirectoryContents>();
         }
-
-
-
+ 
         private static string ToXmlString(string org)
         {
             if (String.IsNullOrEmpty(org)) return ("");
@@ -477,7 +467,6 @@ namespace DCPlusPlus
             //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
             return (tmp);
         }
-
         private static string FromXmlString(string org)
         {
             if (org == null) return ("");
@@ -505,11 +494,6 @@ namespace DCPlusPlus
             //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
             return (tmp);
         }
-
-
-
-
-
         private DirectoryContents FindExistingDirectory(DirectoryContents dc,string directory_name)
         {
             foreach (DirectoryContents dir in dc.directories)
@@ -518,8 +502,6 @@ namespace DCPlusPlus
             }
             return (null);
         }
-
-        
         private void FillDirectories(DirectoryContents root)
         {
             lock (share_lock)
@@ -550,7 +532,6 @@ namespace DCPlusPlus
                 }
             }
         }
-
         private bool CleanDirectories(DirectoryContents dc)
         {//cleans directorycontents class of empty shares
             //check if this dir is empty and shall be removed
@@ -569,7 +550,6 @@ namespace DCPlusPlus
             }
             return (true);
         }
-
         private string GetDirectoryContentsString(DirectoryContents dc)
         {//recursively get all contents in one string
             string dir_string = "";
@@ -589,7 +569,6 @@ namespace DCPlusPlus
             }
             return (dir_string);
         }
-
         public string GetFileListXml()
         {
             string xml = "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n";
@@ -607,7 +586,6 @@ namespace DCPlusPlus
             xml += "</FileListing>\n";
             return (xml);
         }
-
         public byte[] GetFileListXmlBZ2()
         {
             try
