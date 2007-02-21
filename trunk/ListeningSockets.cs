@@ -10,12 +10,8 @@ namespace DCPlusPlus
     public class ListeningSockets
     {
         public delegate void SearchResultEventHandler(SearchResults.SearchResult result);
-
         public event SearchResultEventHandler SearchResultReceived;
-
-        public delegate bool PeerConnectedEventHandler(Peer peer);
-
-        public event PeerConnectedEventHandler PeerConnected;
+        public event Peer.ConnectedEventHandler PeerConnected;
 
         protected string ip = "";
         public string IP
@@ -25,7 +21,6 @@ namespace DCPlusPlus
                 return (ip);
             }
         }
-
         protected string external_ip = "";
         public string ExternalIP
         {
@@ -38,7 +33,6 @@ namespace DCPlusPlus
                 external_ip = value;
             }
         }
-
         protected int tcp_port = 0;
         public int TcpPort
         {
@@ -51,7 +45,6 @@ namespace DCPlusPlus
                 tcp_port = value;
             }
         }
-
         protected int udp_port = 0;
         public int UdpPort
         {
@@ -65,7 +58,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected int max_tcp_connections = 10;
         public int MaxTcpConnections
         {
@@ -78,7 +70,6 @@ namespace DCPlusPlus
                 max_tcp_connections = value;
             }
         }
-
         protected int max_udp_connections = 10;
         public int MaxUdpConnections
         {
@@ -91,7 +82,6 @@ namespace DCPlusPlus
                 max_udp_connections = value;
             }
         }
-
         public int MaxConnections
         {
             get
@@ -104,17 +94,14 @@ namespace DCPlusPlus
                 max_tcp_connections = value / 2;
             }
         }
-
         public ListeningSockets()
         {
             SetupListeningSocket();
         }
-
         ~ListeningSockets()
         {
             CloseListeningSocket();
         }
-
         protected bool listening = false;
         public bool IsListening
         {
@@ -123,70 +110,64 @@ namespace DCPlusPlus
                 return (listening);
             }
         }
-
         private Socket tcp_socket = null;
         private IAsyncResult tcp_callback = null;
-
         private Socket udp_socket = null;
         private byte[] receive_from_buffer = new byte[1024];
         private IPEndPoint receive_from_endpoint = new IPEndPoint(IPAddress.None, 0);
-
         public void UpdateConnectionSettings()
         {
             if (listening)
                 CloseListeningSocket();
             SetupListeningSocket();
-      
         }
-
-
         public void Close()
         {
             CloseListeningSocket();
         }
-
-
         private void CloseListeningSocket()
         {
             //close the listening socket if openened
-            if (listening)
+            lock (listening_lock)
             {
-                listening = false;
-                try
+                if (listening)
                 {
-                    if (udp_socket != null)
+                    listening = false;
+                    try
                     {
-                        udp_socket.ReceiveTimeout = 0;
-                        udp_socket.Shutdown(SocketShutdown.Both);
-                        Thread.Sleep(10);
-                        udp_socket.Close();
-                        Thread.Sleep(10);
-                        udp_socket = null;
-                        
-                        Thread.Sleep(10);
-                        Console.WriteLine("Closed Listening udp socket.");
-                    }
-                    if (tcp_socket != null)
-                    {
-                        //int temp_timeout = tcp_socket.ReceiveTimeout;
-                        //tcp_socket.Shutdown(SocketShutdown.Both);
-                        //tcp_socket
-                        tcp_socket.ReceiveTimeout = 0;
-                        tcp_socket.Close();
-                        Thread.Sleep(10);
-                        tcp_socket = null;
-                        Thread.Sleep(10);
-                        Console.WriteLine("Closed Listening tcp socket.");
-                    }
+                        if (udp_socket != null)
+                        {
+                            udp_socket.ReceiveTimeout = 0;
+                            //udp_socket.Shutdown(SocketShutdown.Both);
+                            //Thread.Sleep(10);
+                            udp_socket.Close();
+                            //Thread.Sleep(10);
+                            udp_socket = null;
+                            Thread.Sleep(10);
+                            Console.WriteLine("Closed Listening udp socket.");
+                        }
+                        if (tcp_socket != null)
+                        {
+                            //int temp_timeout = tcp_socket.ReceiveTimeout;
+                            //tcp_socket.Shutdown(SocketShutdown.Both);
+                            //tcp_socket
+                            tcp_socket.ReceiveTimeout = 0;
+                            tcp_socket.Close();
+                            //Thread.Sleep(10);
+                            tcp_socket = null;
+                            Thread.Sleep(10);
+                            Console.WriteLine("Closed Listening tcp socket.");
+                        }
 
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error closing listening socket: "+ex.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Error closing listening socket: " + ex.Message);
+                    }
                 }
             }
         }
-
+        private object listening_lock = new Object();
         private void SetupListeningSocket()
         {
             //if ip is nullorempty
@@ -195,42 +176,42 @@ namespace DCPlusPlus
             //select random ports
             //
             // setup socket accordingly
-
-            if (!listening)
+            lock (listening_lock)
             {
-                if (tcp_socket == null)
+                if (!listening)
                 {
-                    tcp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                    IPEndPoint tcp_local_endpoint = new IPEndPoint(IPAddress.Any, tcp_port);
-                    tcp_socket.Bind(tcp_local_endpoint);
-                    tcp_port = ((IPEndPoint)tcp_socket.LocalEndPoint).Port;
-                    tcp_socket.Blocking = false;
-                    //tcp_socket.LingerState = new LingerOption(false, 0);
-                    tcp_socket.Listen(max_tcp_connections);
-                    AsyncCallback event_accept = new AsyncCallback(OnAccept);
-                    tcp_callback = tcp_socket.BeginAccept(event_accept, tcp_socket);
-                    Console.WriteLine("Bound listening tcp socket to port: " + tcp_port);
+                    listening = true;
+                    if (tcp_socket == null)
+                    {
+                        tcp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                        IPEndPoint tcp_local_endpoint = new IPEndPoint(IPAddress.Any, tcp_port);
+                        tcp_socket.Bind(tcp_local_endpoint);
+                        tcp_port = ((IPEndPoint)tcp_socket.LocalEndPoint).Port;
+                        tcp_socket.Blocking = false;
+                        //tcp_socket.LingerState = new LingerOption(false, 0);
+                        tcp_socket.Listen(max_tcp_connections);
+                        AsyncCallback event_accept = new AsyncCallback(OnAccept);
+                        tcp_callback = tcp_socket.BeginAccept(event_accept, tcp_socket);
+                        Console.WriteLine("Bound listening tcp socket to port: " + tcp_port);
+                    }
+                    else Console.WriteLine("tcp port already in use :" + tcp_port);
+                    if (udp_socket == null)
+                    {
+                        udp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                        IPEndPoint udp_local_endpoint = new IPEndPoint(IPAddress.Any, udp_port);
+                        udp_socket.Bind(udp_local_endpoint);
+                        udp_port = ((IPEndPoint)udp_socket.LocalEndPoint).Port;
+                        udp_socket.Blocking = false;
+                        //udp_socket.LingerState = new LingerOption(false, 0);
+                        EndPoint temp_receive_from_endpoint = (EndPoint)receive_from_endpoint;
+                        AsyncCallback event_receive_from = new AsyncCallback(OnReceiveFrom);
+                        udp_socket.BeginReceiveFrom(receive_from_buffer, 0, receive_from_buffer.Length, SocketFlags.None, ref temp_receive_from_endpoint, event_receive_from, udp_socket);
+                        Console.WriteLine("Bound UDP-Channel to port: " + udp_port);
+                    }
+                    else Console.WriteLine("udp port already in use :" + udp_port);
                 }
-                else Console.WriteLine("tcp port already in use :" + tcp_port);
-                if (udp_socket == null)
-                {
-                    udp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                    IPEndPoint udp_local_endpoint = new IPEndPoint(IPAddress.Any, udp_port);
-                    udp_socket.Bind(udp_local_endpoint);
-                    udp_port = ((IPEndPoint)udp_socket.LocalEndPoint).Port;
-                    udp_socket.Blocking = false;
-                    //udp_socket.LingerState = new LingerOption(false, 0);
-                    EndPoint temp_receive_from_endpoint = (EndPoint)receive_from_endpoint;
-                    AsyncCallback event_receive_from = new AsyncCallback(OnReceiveFrom);
-                    udp_socket.BeginReceiveFrom(receive_from_buffer, 0, receive_from_buffer.Length, SocketFlags.None, ref temp_receive_from_endpoint, event_receive_from, udp_socket);
-                    Console.WriteLine("Bound UDP-Channel to port: " + udp_port);
-                }
-                else Console.WriteLine("udp port already in use :" + udp_port);
-
-                listening = true;
             }
         }
-
         private void OnReceiveFrom(IAsyncResult result)
         {
             if (udp_socket != null)
@@ -283,7 +264,6 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("ReceiveFrom on udp socket aborted.");
         }
-
         private void InterpretReceivedString(string received_string)
         {
             // possible strings
@@ -299,7 +279,6 @@ namespace DCPlusPlus
             }
          
         }
-
         private void InterpretCommand(string received_command)
         {
             int command_end = received_command.IndexOf(" ");
@@ -336,7 +315,6 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Error interpreting command: " + received_command);
         }
-
         private void OnAccept(IAsyncResult result)
         {
             if (tcp_socket != null)
@@ -362,7 +340,7 @@ namespace DCPlusPlus
                     {
                         if (PeerConnected != null)
                         {
-                            if (!PeerConnected(new_peer)) client.Close();//if no slots avail just close connection
+                            PeerConnected(new_peer);
                         }
                     
                     }
@@ -391,7 +369,6 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Accept on tcp socket aborted.");
         }
-
         public void SearchReply(string result_name,long filesize,Hub hub, Hub.SearchParameters search)
         {
             try
@@ -411,7 +388,6 @@ namespace DCPlusPlus
                 Console.WriteLine("Exception during sending of SearchReply to: "+search.ip+":"+search.port+" : "+ex.Message);
             }
         }
-
         protected void SearchReplyCallback(IAsyncResult ar)
         {
             Socket search_reply_socket = (Socket)ar.AsyncState;
@@ -425,8 +401,5 @@ namespace DCPlusPlus
                 Console.WriteLine("exception during sending of SearchReply: " + ex.Message);
             }
         }
-
-
-
     }
 }

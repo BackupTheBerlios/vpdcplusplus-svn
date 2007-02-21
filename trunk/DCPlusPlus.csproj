@@ -38,6 +38,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PortCheck.cs" />
     <Compile Include="TigerTree\Base32.cs" />
     <Compile Include="Client.cs" />
     <Compile Include="Connection.cs" />

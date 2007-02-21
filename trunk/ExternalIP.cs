@@ -14,10 +14,12 @@ namespace DCPlusPlus
     [TestFixture]
     public class ExternalIP
     {
+        public event CompletedEventHandler Completed;
+        public event ProgressChangedEventHandler ProgressChanged;
+        public event UnableToFetchEventHandler UnableToFetch;
         public delegate void CompletedEventHandler(ExternalIP ex_ip);
         public delegate void ProgressChangedEventHandler(ExternalIP ex_ip);
         public delegate void UnableToFetchEventHandler(ExternalIP ex_ip);
-
         protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
         public Connection.ErrorCodes ErrorCode
         {
@@ -26,9 +28,6 @@ namespace DCPlusPlus
                 return (error_code);
             }
         }
-
-
-
         protected int percentage = 0;
         public int Percentage
         {
@@ -37,9 +36,6 @@ namespace DCPlusPlus
                 return (percentage);
             }
         }
-
-
-
         protected string my_ip;
         public string MyIP
         {
@@ -53,7 +49,6 @@ namespace DCPlusPlus
             }
 
         }
-
         protected bool busy = false;
         public bool IsBusy
         {
@@ -62,13 +57,7 @@ namespace DCPlusPlus
                 return (busy);
             }
         }
-
-        public event CompletedEventHandler Completed;
-        public event ProgressChangedEventHandler ProgressChanged;
-        public event UnableToFetchEventHandler UnableToFetch;
-
         private WebClient wc = new WebClient();
-
         public ExternalIP()
         {
             my_ip = "";
@@ -76,9 +65,7 @@ namespace DCPlusPlus
             wc.DownloadDataCompleted += new DownloadDataCompletedEventHandler(DownloadFileCallback);
 
         }
-
         private string url = "http://www.lawrencegoetz.com/programs/ipinfo/";
-
         public void FetchIP()
         {
             if (!busy)
@@ -98,7 +85,6 @@ namespace DCPlusPlus
             }
 
         }
-
         public void AbortFetch()
         {
             if (busy)
@@ -117,7 +103,6 @@ namespace DCPlusPlus
                 busy = false;
             }
         }
-
         private void DownloadFileCallback(object sender, DownloadDataCompletedEventArgs e)
         {
             try
@@ -174,15 +159,13 @@ namespace DCPlusPlus
 
             }
         }
-
         private void DownloadProgressCallback(object sender, DownloadProgressChangedEventArgs e)
         {
             percentage = e.ProgressPercentage;
             if (ProgressChanged != null)
                 ProgressChanged(this);
         }
-
-        #region Unit Testing
+#region Unit Testing
         [Test]
         public void TestResolve()
         {
@@ -213,7 +196,6 @@ namespace DCPlusPlus
             }
             Console.WriteLine("External IP resolve Test successful.");
         }
-
         [Test]
         public void TestResolveFailServiceOffine()
         {

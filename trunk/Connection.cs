@@ -13,7 +13,7 @@ namespace DCPlusPlus
      * oncommandhandler etc
      */
 
-    public class Connection
+    public abstract class Connection
     {
         protected bool is_extended_protocol = false;
         public bool IsExtendedProtocol
@@ -36,12 +36,22 @@ namespace DCPlusPlus
                 nick = value;
             }
         }
+        //TODO change is_connected etc to a state enum 
         protected bool is_connected = false;
         public bool IsConnected
         {
             get
             {
                 return (is_connected);
+            }
+
+        }
+        protected bool is_connecting = false;
+        public bool IsConnecting
+        {
+            get
+            {
+                return (is_connecting);
             }
 
         }
@@ -70,7 +80,8 @@ namespace DCPlusPlus
             }
         }
         protected Socket socket = null;
-        protected byte[] receive_buffer = new byte[32768];
+        protected byte[] receive_buffer = null;
+        public abstract void Disconnect();
         public void SendCommand(string command)
         {
             SendCommand(command, "");
@@ -101,6 +112,8 @@ namespace DCPlusPlus
                 catch (Exception e)
                 {
                     Console.WriteLine("Error sending command to peer: " + e.Message);
+                    error_code = ErrorCodes.Exception;
+                    Disconnect();
                 }
             }
         }
@@ -114,6 +127,8 @@ namespace DCPlusPlus
             catch (Exception ex)
             {
                 Console.WriteLine("exception during send of command: " + ex.Message);
+                error_code = ErrorCodes.Exception;
+                Disconnect();
             }
         }
         protected string[] supports=new string[0];

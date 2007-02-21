@@ -22,6 +22,28 @@ namespace DCPlusPlus
     {
         public delegate void SearchResultEventHandler(Hub hub, SearchResults.SearchResult result);
         public event SearchResultEventHandler SearchResultReceived;
+        public delegate void SearchEventHandler(Hub hub, SearchParameters search);
+        public event SearchEventHandler SearchReceived;
+        public delegate void MainChatLineReceivedEventHandler(Hub hub, ChatLine line);
+        public event MainChatLineReceivedEventHandler MainChatLineReceived;
+        public delegate void PrivateChatLineReceivedEventHandler(Hub hub, ChatLine line);
+        public event PrivateChatLineReceivedEventHandler PrivateChatLineReceived;
+        public delegate void UserQuitEventHandler(Hub hub, string username);
+        public event UserQuitEventHandler UserQuit;
+        public delegate void UserJoinedEventHandler(Hub hub, string username);
+        public event UserJoinedEventHandler UserJoined;
+        public delegate void LoggedInEventHandler(Hub hub);
+        public event LoggedInEventHandler LoggedIn;
+        public delegate void MoveForcedEventHandler(Hub src_hub, Hub dst_hub);
+        public event MoveForcedEventHandler MoveForced;
+        public delegate void ConnectToMeEventHandler(Hub hub, Peer connection);
+        public event ConnectToMeEventHandler ConnectToMeReceived;
+        public delegate void DisconnectedEventHandler(Hub hub);
+        public event DisconnectedEventHandler Disconnected;
+        public delegate void ConnectedEventHandler(Hub hub);
+        public event ConnectedEventHandler Connected;
+        public delegate void UnableToConnectEventHandler(Hub hub);
+        public event UnableToConnectEventHandler UnableToConnect;
         public class FileParameters
         {
             public string filename;
@@ -78,28 +100,6 @@ namespace DCPlusPlus
             }
 
         }
-        public delegate void SearchEventHandler(Hub hub,SearchParameters search);
-        public event SearchEventHandler SearchReceived;
-        public delegate void MainChatLineReceivedEventHandler(Hub hub, ChatLine line);
-        public event MainChatLineReceivedEventHandler MainChatLineReceived;
-        public delegate void PrivateChatLineReceivedEventHandler(Hub hub, ChatLine line);
-        public event PrivateChatLineReceivedEventHandler PrivateChatLineReceived;
-        public delegate void UserQuitEventHandler(Hub hub, string username);
-        public event UserQuitEventHandler UserQuit;
-        public delegate void UserJoinedEventHandler(Hub hub, string username);
-        public event UserJoinedEventHandler UserJoined;
-        public delegate void LoggedInEventHandler(Hub hub);
-        public event LoggedInEventHandler LoggedIn;
-        public delegate void MoveForcedEventHandler(Hub src_hub, Hub dst_hub);
-        public event MoveForcedEventHandler MoveForced;
-        public delegate void ConnectToMeEventHandler(Hub hub, Peer connection);
-        public event ConnectToMeEventHandler ConnectToMeReceived;
-        public delegate void DisconnectedEventHandler(Hub hub);
-        public event DisconnectedEventHandler Disconnected;
-        public delegate void ConnectedEventHandler(Hub hub);
-        public event ConnectedEventHandler Connected;
-        public delegate void UnableToConnectEventHandler(Hub hub);
-        public event UnableToConnectEventHandler UnableToConnect;
         protected string name = "";
         public string Name
         {
@@ -482,6 +482,7 @@ namespace DCPlusPlus
         }
         public Hub()
         {
+            is_connecting = false;
             is_connected = false;
             is_extended_protocol = false;
             is_logged_in = false;
@@ -494,69 +495,67 @@ namespace DCPlusPlus
             Disconnect();
             Connect();
         }
-        public void Disconnect()
+        public override void Disconnect()
         {
-            try
+            if (is_connected || is_connecting)
             {
-                if (socket != null && socket.Connected)
-                {
-                    //if(receive_operation!=null) socket //socket.EndReceive(receive_operation);
-                    socket.Shutdown(SocketShutdown.Both);
-                    Thread.Sleep(10);
-                    socket.Close();
-                    socket = null;
-                    //receive_operation = null;
-                }
-                is_connected = false;
-                is_extended_protocol = false;
-                is_logged_in = false;
                 try
                 {
-                    if (Disconnected != null)
-                        Disconnected(this);
+                    if (socket != null && socket.Connected)
+                    {
+                        //if(receive_operation!=null) socket //socket.EndReceive(receive_operation);
+                        socket.Shutdown(SocketShutdown.Both);
+                        //Thread.Sleep(10);
+                        socket.Close();
+                        socket = null;
+                        //receive_operation = null;
+                    }
+                    if (is_connected)
+                    {
+                        if (Disconnected != null)
+                            Disconnected(this);
+                    }else if (is_connecting)
+                    {
+                        if (UnableToConnect != null)
+                            UnableToConnect(this);
+                    }
+                    is_connecting = false;
+                    is_connected = false;
+                    is_extended_protocol = false;
+                    is_logged_in = false;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Exception in Disconnect event: " + ex.Message);
+                    Console.WriteLine("Error disconnecting Hub: " + name + "(exception:" + ex.Message + ")");
                     error_code = ErrorCodes.Exception;
-                    if (UnableToConnect != null)
-                        UnableToConnect(this);
                 }
-
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error disconnecting Hub: " + name + "(exception:" + ex.Message + ")");
-                error_code = ErrorCodes.Exception;
-                if (UnableToConnect != null)
-                    UnableToConnect(this);
-
-            }
-
         }
         public void Connect()
         {
+            if (is_connecting)
+            {//better handling of fast user retries
+                error_code = ErrorCodes.UserDisconnect;
+                Disconnect();
+            }
             if (!is_connected)
             {
                 //Console.WriteLine("Connecting to Hub: "+name);
                 try
                 {
-                    //Disconnect();//if still connected , disconnect first
-
+                    is_connecting = true;
                     socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                     socket.Blocking = false;
-                    //IPEndPoint endpoint = new IPEndPoint(IPAddress.Parse(address),port);
                     AsyncCallback event_host_resolved = new AsyncCallback(OnHostResolve);
                     Dns.BeginGetHostEntry(address, event_host_resolved, socket);
+                    //IPEndPoint endpoint = new IPEndPoint(IPAddress.Parse(address),port);
                     //IPHostEntry ip = Dns.GetHostEntry(address);
                 }
                 catch (Exception ex)
                 {
                     error_code = ErrorCodes.Exception;
                     Console.WriteLine("Error connecting to Hub: " + name + "(exception:" + ex.Message + ")");
-                    if (UnableToConnect != null)
-                        UnableToConnect(this);
-
+                    Disconnect();
                 }
             }
         }
@@ -577,27 +576,24 @@ namespace DCPlusPlus
                     {
                         Console.WriteLine("Unable to connect to server: " + name + "(address:" + address + ")");
                         error_code = ErrorCodes.UnableToConnect;
-                        if (UnableToConnect != null)
-                            UnableToConnect(this);
+                        Disconnect();
                     }
 
             }
 
             catch (SocketException sex)
             {
-                if (sex.ErrorCode == 11001)
+                if (sex.ErrorCode == 11001) //TODO i know , or correctly i dont know ...
                 {
                     error_code = ErrorCodes.UnableToConnect;
                     Console.WriteLine("Error during Address resolve of Hub: " + name + "(address:" + address + ")");
-                    if (UnableToConnect != null)
-                        UnableToConnect(this);
+                    Disconnect();
                 }
                 else
                 {
                     error_code = ErrorCodes.UnableToConnect;
                     Console.WriteLine("Error during Address resolve of Hub: " + name + "(address:" + address + ")");
-                    if (UnableToConnect != null)
-                        UnableToConnect(this);
+                    Disconnect();
                 }
 
             }
@@ -605,23 +601,18 @@ namespace DCPlusPlus
             {
                 error_code = ErrorCodes.Exception;
                 Console.WriteLine("Error during Address resolve of Hub: " + name + "(address:" + address +",exception:"+ex.Message+")");
-                if (UnableToConnect != null)
-                    UnableToConnect(this);
-
+                Disconnect();
             }
-
-
         }
-        //private IAsyncResult receive_operation = null;
         private void OnConnect(IAsyncResult result)
         {
             Socket connect_socket = (Socket)result.AsyncState;
-
             try
             {
                 if (connect_socket.Connected)
                 {
                     AsyncCallback event_receive = new AsyncCallback(OnReceive);
+                    receive_buffer = new byte[32768];
                     connect_socket.BeginReceive(receive_buffer, 0, receive_buffer.Length, SocketFlags.None, event_receive, connect_socket);
                     //Console.WriteLine("Successfully connected to Hub: " + name);
                     try
@@ -633,18 +624,16 @@ namespace DCPlusPlus
                     {
                         error_code = ErrorCodes.Exception;
                         Console.WriteLine("Exception in Connected event: " + ex.Message);
-                        if (UnableToConnect != null)
-                            UnableToConnect(this);
+                        Disconnect();
                     }
-
+                    is_connecting = false;
                     is_connected = true;
                 }
                 else
                 {
                     error_code = ErrorCodes.UnableToConnect;
                     Console.WriteLine("Unable to connect to server: " + name);
-                    if (UnableToConnect != null)
-                        UnableToConnect(this);
+                    Disconnect();
                 }
 
             }
@@ -652,17 +641,13 @@ namespace DCPlusPlus
             {
                 error_code = ErrorCodes.Exception;
                 Console.WriteLine("Error during connect to Hub: " + name + "(exception:" + ex.Message + ")");
-                if (UnableToConnect != null)
-                    UnableToConnect(this);
+                Disconnect();
             }
-
-
         }
-        //TODO counter possible packet splits in messages
         private void OnReceive(IAsyncResult result)
         {
             Socket receive_socket = (Socket)result.AsyncState;
-            if (!receive_socket.Connected) return;
+            if (!receive_socket.Connected) return;//TODO change to disconnect();
             try
             {
                 int received_bytes = receive_socket.EndReceive(result);
@@ -678,19 +663,7 @@ namespace DCPlusPlus
                 }
                 else
                 {
-                    is_connected = false;
-                    //Console.WriteLine("Connection to Hub: " + name + " dropped.");
-                    try
-                    {
-                        if (Disconnected != null)
-                            Disconnected(this);
-                    }
-                    catch (Exception ex)
-                    {
-                        error_code = ErrorCodes.Exception;
-                        Console.WriteLine("Exception in Disconnect event: " + ex.Message);
-                    }
-
+                    Disconnect();
                 }
 
             }
@@ -698,26 +671,13 @@ namespace DCPlusPlus
             {
                 error_code = ErrorCodes.Exception;
                 Console.WriteLine("Error receiving data from Hub: " + name + "(exception:" + ex.Message + ")");
-                try
-                {
-                    is_connected = false;
-                    if (Disconnected != null)
-                        Disconnected(this);
-                }
-                catch (Exception ex2)
-                {
-                    error_code = ErrorCodes.Exception;
-                    Console.WriteLine("Exception in Disconnect event: " + ex2.Message);
-                }
-
+                Disconnect();
             }
 
         }
         public void SendChatMessage(string message)
         {
-
             string send_string = "<" + nick + "> " + message + "|";
-
             try
             {
                 //socket.Send(Encoding.UTF8.GetBytes(send_string), SocketFlags.None);
@@ -728,6 +688,7 @@ namespace DCPlusPlus
             {
                 error_code = ErrorCodes.Exception;
                 Console.WriteLine("Error sending chat message to Hub: " + name + "(exception:" + e.Message + ")");
+                Disconnect();
             }
         }
         private void SendChatMessageCallback(IAsyncResult ar)
@@ -739,7 +700,9 @@ namespace DCPlusPlus
             }
             catch (Exception ex)
             {
-                Console.WriteLine("exception during send of chat: " + ex.Message);
+                error_code = ErrorCodes.Exception;
+                Console.WriteLine("Error during sending chat message to Hub: " + name + "(exception:" + ex.Message + ")");
+                Disconnect();
             }
         }
         public void SendChatMessage(string message, string user)
@@ -826,7 +789,7 @@ namespace DCPlusPlus
             else if (my_connection_mode == Hub.ConnectionMode.Passive) temp_connection_mode = "P";
             //else if (my_connection_mode == Hub.ConnectionMode.Socks5) temp_connection_mode = "5";
             //SendCommand("MyINFO", "$ALL " + parameters[0] + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:0/0/0,S:2>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
-            SendCommand("MyINFO", "$ALL " + nick + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:0/0/0,S:2,O:0>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
+            SendCommand("MyINFO", "$ALL " + nick + " <" + my_name + " V:" + my_tag_version + ",M:" + temp_connection_mode + ",H:1/2/2,S:2,O:0>$ $Cable1$" + my_email + "$" + my_share_size.ToString() + "$");
         }
         private void AddChatToHistory(string username, string message)
         {
@@ -961,7 +924,6 @@ namespace DCPlusPlus
                             {
                                 Console.WriteLine("Exception in LoggedIn: " + ex.Message);
                             }
-
                         }
                         else
                         {//new user announced by server
@@ -976,6 +938,7 @@ namespace DCPlusPlus
                         break;
 
                     case "NickList":
+                        Console.WriteLine("NickList Message received.");
                         UserListClear();
                         string[] temp_users = parameters[0].Split("$$".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
                         foreach (string temp_user in temp_users)
@@ -1089,6 +1052,7 @@ namespace DCPlusPlus
                         break;
 
                     case "UserIP":
+                        Console.WriteLine("UserIP Message received: " + parameter);
                         break;
 
                     case "MCTo:":
@@ -1131,11 +1095,15 @@ namespace DCPlusPlus
                         break;
 
                     case "LogedIn":
+                        Console.WriteLine("LogedIn Message received: " + parameter);
                         //what the hell is this and who forgot to take some english lessons ?
                         break;
                     case "MyINFO":
+                        //Console.WriteLine("MyINFO Message received: " + parameter);
+                        UserListAdd(parameters[1]);
                         break;
                     case "GetPass":
+                        Console.WriteLine("GetPass Message received: " + parameter);
                         break;
 
                     case "ForceMove":
@@ -1147,12 +1115,9 @@ namespace DCPlusPlus
                         }
                         break;
 
-
                     case "ValidateDenide":
                         Console.WriteLine("Nick: "+parameters[0]+" on Hub: " + name + " is already in use.");
                         break;
-
-
 
                     case "HubIsFull":
                         Console.WriteLine("Hub: " + name + " is full.");
@@ -1174,7 +1139,7 @@ namespace DCPlusPlus
                                 is_extended_protocol = true;
                                 //Console.WriteLine("Hub is using the dc++ protocol enhancements.");
                                 //SendCommand("Supports", "UserCommand NoGetINFO NoHello UserIP2 TTHSearch ZPipe0 GetZBlock ");
-                                SendCommand("Supports", "UserCommand TTHSearch ");
+                                SendCommand("Supports", "UserCommand TTHSearch NoGetINFO NoHello ");
                             }
 
                             //string decoded_key = MyLockToKey(key);
@@ -1201,6 +1166,7 @@ namespace DCPlusPlus
             ret.country = this.country;
             ret.description = this.description;
             ret.ip = this.ip;
+            ret.is_connecting = false;
             ret.is_connected = false;
             ret.is_extended_protocol = false;
             ret.is_grabbed = this.is_grabbed;

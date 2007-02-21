@@ -10,8 +10,8 @@ namespace DCPlusPlus
     {
         //TODO peer_lock
         //search results lock
-        protected Object peers_lock = "";
-        public Object PeersLock
+        protected Object peers_lock = new Object();
+        /*public Object PeersLock
         {
             get
             {
@@ -21,7 +21,7 @@ namespace DCPlusPlus
             {
                 peers_lock = value;
             }
-        }
+        }*/
         protected List<Peer> peers = new List<Peer>();
         public List<Peer> Peers
         {
@@ -63,7 +63,7 @@ namespace DCPlusPlus
                 return (shares);
             }
         }
-        protected Object connected_hubs_lock = "";
+        protected Object connected_hubs_lock = new Object(); //TODO rename connected hubs
         public Object ConnectedHubsLock
         {
             get
@@ -183,7 +183,6 @@ namespace DCPlusPlus
         }
         public void Search(string search_string)
         {
-
             search_results.SearchTerm = search_string;
             lock (connected_hubs_lock)
             {
@@ -259,6 +258,27 @@ namespace DCPlusPlus
             download_queue.AddFileList(hub, username);
             hub.SendConnectToMe(username); //signal download to hub to start it
         }
+
+        public void GetTTHL(Queue.QueueEntry me)
+        {
+            //if (me == null) return;
+            me.WantTTHL = true;
+            me.StartDownload();
+        }
+        public void StopDownload(Queue.QueueEntry me)
+        {
+            lock (peers_lock)
+            {
+                foreach (Peer peer in peers)
+                {
+                    if (peer.QueueEntry == me)
+                    {
+                        peer.Disconnect();
+                        //break;
+                    }
+                }
+            }
+        }
         public void StartDownload(SearchResults.SearchResult result)
         {
             if (result.IsHubResolved)
@@ -280,7 +300,10 @@ namespace DCPlusPlus
         public void StartDownload(Queue.QueueEntry me)
         {
             if (me == null) return;
-            lock (me.SourcesLock)
+            me.StartDownload();
+
+
+            /*            lock (me.SourcesLock)
             {//TODO put this in queue class
                 foreach (Queue.QueueEntry.Source source in me.Sources)
                 {
@@ -296,6 +319,7 @@ namespace DCPlusPlus
 
             //result.Hub.SendCommand("ConnectToMe", result.UserName); //signal download to hub to start it
             //Console.WriteLine("Hub was not resolved from result hub address: " + result.HubAddress);
+        */
         }
         public void UpdateConnectionSettings()
         {
@@ -344,11 +368,7 @@ namespace DCPlusPlus
                         return (hub);
                     }
                 }
-
             }
-
-
-
             return (null);
         }
         public Hub FindUserHub(string username)
@@ -366,14 +386,19 @@ namespace DCPlusPlus
         }
         private bool CheckForUserInPeers(string username)
         { //TODO save originating hub in peer and check for hub/username combination
+            bool ret = false;
             lock (peers_lock)
             {
                 foreach (Peer peer in peers)
                 {
-                    if (peer.PeerNick == username) return (true);
+                    if (peer.PeerNick == username)
+                    {
+                        ret = true;
+                        break;
+                    }
                 }
             }
-            return (false);
+            return (ret);
         }
         private void ContinueWithQueueForUser(string username)
         {
@@ -390,10 +415,6 @@ namespace DCPlusPlus
         {
             return (Path.GetDirectoryName(Assembly.GetExecutingAssembly().GetModules()[0].FullyQualifiedName));
         }
-        //deprecated
-        public delegate void DownloadStartedEventHandler(Peer peer);
-        public event DownloadStartedEventHandler DownloadStarted;
-        //delete above soon
         public event Peer.ConnectedEventHandler PeerConnected;
         public event Peer.DisconnectedEventHandler PeerDisconnected;
         public event Peer.HandShakeCompletedEventHandler PeerHandShakeCompleted;
@@ -407,7 +428,9 @@ namespace DCPlusPlus
         public event Hub.ConnectedEventHandler HubConnected;
         public event Hub.MoveForcedEventHandler HubMoveForced;
         public event Hub.MainChatLineReceivedEventHandler HubMainChatReceived;
-        public event Hub.MainChatLineReceivedEventHandler HubPrivateChatReceived;
+        public event Hub.PrivateChatLineReceivedEventHandler HubPrivateChatReceived;
+
+
         private void SetupPeerEventHandler(Peer client)
         {
             client.Nick = nick;
@@ -443,7 +466,6 @@ namespace DCPlusPlus
                 if (file_list_request_client.UploadRequestFilename == "files.xml.bz2")
                     file_list_request_client.UploadFilename = file_list_request_client.UploadRequestFilename;
                 file_list_request_client.UploadFileListData = shares.GetFileListXmlBZ2();
-
                 return (Peer.FileRequestAnswer.LetsGo);
             };
 
@@ -452,11 +474,10 @@ namespace DCPlusPlus
                 Sharing.SharingEntry entry = shares.GetShareByFileRequest(file_request_client.UploadRequestFilename);
                 if(entry!=null) 
                 {
-                    file_request_client.UploadFilename = entry.Filename;
+                   file_request_client.UploadFilename = entry.Filename;
                    return (Peer.FileRequestAnswer.LetsGo);
                 }
                 else return (Peer.FileRequestAnswer.FileNotAvailable);
-    
             };
 
             client.HandShakeCompleted += delegate(Peer handshake_client)
@@ -469,14 +490,13 @@ namespace DCPlusPlus
                     Queue.QueueEntry.Source source = entry.FindFirstSourceByUser(handshake_client.PeerNick);
                     if (source != null)
                     {
-                        //entry.IsInUse = true;
                         //handshake_client.StartDownload(source.Filename, entry.OutputFilename, entry.Filesize);
-                        if (entry.Type == Queue.QueueEntry.EntryType.File)
+                        if (entry.Type == Queue.QueueEntry.EntryType.File && entry.WantTTHL)
+                            handshake_client.GetTTHL(entry);
+                        else if (entry.Type == Queue.QueueEntry.EntryType.File )
                             handshake_client.StartDownload(source, entry);
                         else if (entry.Type == Queue.QueueEntry.EntryType.FileList)
                             handshake_client.GetFileList(entry);
-                        if (DownloadStarted != null)
-                            DownloadStarted(handshake_client);
                     }
                     else
                     {
@@ -523,10 +543,15 @@ namespace DCPlusPlus
 
             search_results.DiscardOldResults = true;
 
+            download_queue.EntrySourceStatusChanged += delegate(Queue.QueueEntry entry_changed,Queue.QueueEntry.Source source)
+            {
+                StartDownload(source);
+            };
+            
             local_peer.SearchResultReceived += delegate(SearchResults.SearchResult result)
-                {
-                    InterpretReceivedSearchResult(result);
-                };
+            {
+                InterpretReceivedSearchResult(result);
+            };
 
             local_peer.PeerConnected += delegate(Peer client)
             {
@@ -538,7 +563,6 @@ namespace DCPlusPlus
                 {
                     peers.Add(client);
                 }
-                return (true);//TODO if slots full return false here
             };
 
             download_queue.FileListsDirectory = GetClientDirectory() + "\\filelists";
@@ -646,11 +670,11 @@ namespace DCPlusPlus
                 me.UnableToConnect += delegate(Hub hub)
                 {
                     UpdateSourcesByHub(hub, false);
-                    lock (connected_hubs_lock)
+                    /*lock (connected_hubs_lock) TODO check if commenting this out hurts our code---> :-)
                     {
                         if (connected_hubs.Contains(hub))
                             connected_hubs.Remove(hub);
-                    }
+                    }*/
                     if (HubUnableToConnect != null)
                         HubUnableToConnect(hub);
                 };
@@ -685,5 +709,6 @@ namespace DCPlusPlus
             me.Disconnect();
 
         }
+
     }
 }

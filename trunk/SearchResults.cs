@@ -371,8 +371,8 @@ namespace DCPlusPlus
             
         }
 
-        protected Object results_lock = "";
-        public Object ResultsLock
+        protected Object results_lock = new Object();
+        /*public Object ResultsLock
         {
             get
             {
@@ -382,7 +382,7 @@ namespace DCPlusPlus
             {
                 results_lock = value;
             }
-        }
+        }*/
 
         protected List<SearchResult> results = new List<SearchResult>();
         public List<SearchResult> Results

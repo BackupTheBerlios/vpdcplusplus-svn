@@ -41,7 +41,6 @@ namespace DCPlusPlus
                     //return (has_tth);
                 }
             }
-
             protected string tth = "";
             public string TTH
             {
@@ -54,7 +53,6 @@ namespace DCPlusPlus
                     tth = value;
                 }
             }
-
             protected string filename = "";
             public string Filename
             {
@@ -67,9 +65,7 @@ namespace DCPlusPlus
                     filename = value;
                 }
             }
-
         }
-
         protected List<SharingEntry> items = new List<SharingEntry>();
         //[XmlArrayAttribute("Queue")]
         public List<SharingEntry> Items
@@ -83,7 +79,6 @@ namespace DCPlusPlus
                 items = value;
             }
         }
-
         protected long total_bytes_shared = 0;
         [XmlIgnoreAttribute]
         public long TotalBytesShared
@@ -94,7 +89,6 @@ namespace DCPlusPlus
                 return (total_bytes_shared);
             }
         }
-
         public int Count
         {
             get
@@ -102,10 +96,9 @@ namespace DCPlusPlus
                 return (items.Count);
             }
         }
-
         [XmlIgnoreAttribute]
-        protected Object share_lock = "";
-        public Object SharingLock
+        protected Object share_lock = new Object();
+        /*public Object SharingLock
         {
             get
             {
@@ -115,23 +108,17 @@ namespace DCPlusPlus
             {
                 share_lock = value;
             }
-        }
-
+        }*/
         public delegate void DirectoryFinishedEventHandler(string directory);
         public event DirectoryFinishedEventHandler DirectoryFinished;
-
         public delegate void EntryAddedEventHandler(SharingEntry entry);
         public event EntryAddedEventHandler EntryAdded;
-
         public delegate void EntryRemovedEventHandler(SharingEntry entry);
         public event EntryRemovedEventHandler EntryRemoved;
-
         public delegate void EntriesChangedEventHandler();
         public event EntriesChangedEventHandler EntriesChanged;
-
         public delegate void EntriesClearedEventHandler();
         public event EntriesClearedEventHandler EntriesCleared;
-
         private delegate SharingEntry ShareFileHandler(string filename);
         private SharingEntry ShareFileAsync(string filename)
         {//share file
@@ -200,6 +187,7 @@ namespace DCPlusPlus
                 total_bytes_shared += entry.Filesize;
                 Add(entry);
             }
+            file_list_needs_update = true;
         }
         private void ShareDirectoryFinished(IAsyncResult result)
         {
@@ -207,8 +195,8 @@ namespace DCPlusPlus
             string directory = sdh.EndInvoke(result);
             if (DirectoryFinished != null)
                 DirectoryFinished(directory);
+            file_list_needs_update = true;
         }
-
         // share files with these functions
         public void ShareFile(string filename)
         {
@@ -220,11 +208,11 @@ namespace DCPlusPlus
             ShareDirectoryHandler sdh = new ShareDirectoryHandler(ShareDirectoryAsync);
             IAsyncResult result = sdh.BeginInvoke(directory, new AsyncCallback(ShareDirectoryFinished), sdh);
         }
-
         public SharingEntry GetShareByFileRequest(string file_request)
         {
             if(file_request.StartsWith("TTH/"))
                 return(GetShareByTTH(file_request.Substring(4)));
+            SharingEntry ret = null;
             lock (share_lock)
             {
                 foreach (SharingEntry entry in items)
@@ -232,16 +220,18 @@ namespace DCPlusPlus
                     if (entry.Filename.EndsWith(file_request)) //maybe change this to a more sophisticated approach
                     {
                         //Console.WriteLine("Found entry by filename: "+filename);
-                        return (entry);
+                        ret = entry;
+                        break;
                     }
                 }
             }
-            return (null);
+            return (ret);
 
         }
         //TODO make these both functions async too (via handler in parameters)
         public SharingEntry GetShareByFilename(string filename)
         {
+            SharingEntry ret = null;
             lock (share_lock)
             {
                 foreach (SharingEntry entry in items)
@@ -249,86 +239,164 @@ namespace DCPlusPlus
                     if (entry.Filename.EndsWith(filename)) //maybe change this to a more sophisticated approach
                     {
                         //Console.WriteLine("Found entry by filename: "+filename);
-                        return (entry);
+                        ret =  entry;
+                        break;
                     }
                 }
             }
-            return (null);
+            return (ret);
         }
         public SharingEntry GetShareByTTH(string tth)
         {
+            SharingEntry ret = null;
             lock (share_lock)
             {
                 foreach (SharingEntry entry in items)
                 {
                     if (entry.HasTTH && entry.TTH == tth)
                     {
-                        return (entry);
+                        ret = entry;
+                        break;
                     }
                 }
             }
-            return (null);
+            return (ret);
         }
+        public void Add(SharingEntry item)
+        {
+            lock (share_lock)
+            {
+                items.Add(item);
+            }
+            try
+            {
+                if (EntryAdded != null)
+                    EntryAdded(item);
+                if (EntriesChanged != null)
+                    EntriesChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception occured in added event callback: " + ex.Message);
+            }
+            file_list_needs_update = true;
+        }
+        public void Clear()
+        {
+            lock (share_lock)
+            {
+                items.Clear();
+            }
+            try
+            {
 
+                if (EntriesCleared != null)
+                    EntriesCleared();
+                if (EntriesChanged != null)
+                    EntriesChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception occured in clear event callback: " + ex.Message);
+            }
+            file_list_needs_update = true;
+        }
+        public bool Remove(SharingEntry item)
+        {
+            total_bytes_shared -= item.Filesize;
+            bool ret = false;
+            lock (share_lock)
+            {
+                ret = items.Remove(item);
+            }
+            try
+            {
+                if (EntryRemoved != null)
+                    EntryRemoved(item);
+                if (EntriesChanged != null)
+                    EntriesChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception occured in remove event callback: " + ex.Message);
+            }
+            file_list_needs_update = true;
+            return (ret);
+        }
         public void Remove(string filename)
         {
+            SharingEntry ret = null;
             lock (share_lock)
             {
                 foreach (SharingEntry entry in items)
                 {
                     if (entry.Filename == filename)
                     {
-                        total_bytes_shared -= entry.Filesize;
                         items.Remove(entry);
-                        try
-                        {
-                            if (EntryRemoved != null)
-                                EntryRemoved(entry);
-                            if (EntriesChanged != null)
-                                EntriesChanged();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("Exception occured in remove event callback: " + ex.Message);
-                        }
-
-                        return;
+                        ret = entry;
+                        break;
                     }
                 }
             }
+            if (ret != null)
+            {
+                total_bytes_shared -= ret.Filesize;
+                try
+                {
+                    if (EntryRemoved != null)
+                        EntryRemoved(ret);
+                    if (EntriesChanged != null)
+                        EntriesChanged();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Exception occured in remove event callback: " + ex.Message);
+                }
+            }
+            file_list_needs_update = true;
         }
-
         public void LoadSharesFromXml(string xml)
         {
             lock (share_lock)
             {
-                try
+                items.Clear();
+            }
+            if (EntriesCleared != null)
+                EntriesCleared();
+            Sharing s = new Sharing();
+            try
+            {
+                XmlSerializer serializer = new XmlSerializer(typeof(Sharing));
+                MemoryStream ms = new MemoryStream(System.Text.Encoding.Default.GetBytes(xml));
+                s = (Sharing)serializer.Deserialize(ms);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error deserializing queue: " + ex.Message);
+            }
+            if (s != null)
+            {
+                lock (share_lock)
                 {
-                    Sharing s = new Sharing();
-                    XmlSerializer serializer = new XmlSerializer(typeof(Sharing));
-                    MemoryStream ms = new MemoryStream(System.Text.Encoding.Default.GetBytes(xml));
-                    s = (Sharing)serializer.Deserialize(ms);
                     items = s.Items;
-                    if (EntriesCleared != null)
-                        EntriesCleared();
-                    if (EntryAdded != null)
-                    {
-                        foreach (SharingEntry entry in items)
-                        {
-                            total_bytes_shared += entry.Filesize;
-                            EntryAdded(entry);
-                        }
-                    }
-                    if (EntriesChanged != null)
-                    {
-                        EntriesChanged();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error deserializing queue: " + ex.Message);
                 }
             }
+            if (EntryAdded != null)
+            {
+                lock (share_lock)
+                {
+                    foreach (SharingEntry entry in items)
+                    {
+                        total_bytes_shared += entry.Filesize;
+                        EntryAdded(entry);
+                    }
+                }
+            }
+            if (EntriesChanged != null)
+            {
+                EntriesChanged();
+            }
+            file_list_needs_update = true;
         }
         public string SaveSharesToXml()
         {
@@ -382,11 +450,42 @@ namespace DCPlusPlus
                 Console.WriteLine("Error saving queue to: " + filename + " : " + ex.Message);
             }
         }
-
-        //string file_list
-
+        private bool file_list_needs_update = true; //TODO only update lists on first request after a change (saves a lot of cpu)
+        private string file_list="";
+        private byte[] file_list_bz2;
         public void UpdateFileLists()
         {
+            string xml = "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n";
+            xml += "<FileListing Version=\"1\" CID=\"" + cid + "\" Base=\"/\" Generator=\"" + generator + "\">\n";
+            //hierarchical tree that lists all directories that have
+            // 1. a shared file in it
+            // 2. at least two directories in it that have shared files in its tree
+            //use DirectoryContents class to hold data structure
+            //combine directoryContents to xml string
+            //return xml string
+            DirectoryContents root = new DirectoryContents();
+            FillDirectories(root);
+            bool empty_shares = CleanDirectories(root);
+            xml += GetDirectoryContentsString(root);
+            xml += "</FileListing>\n";
+            /*if (empty_shares)
+                file_list = "";
+            else */
+            file_list = xml;
+            try
+            {
+                MemoryStream input = new MemoryStream(System.Text.Encoding.Default.GetBytes(file_list));
+                MemoryStream output = new MemoryStream();
+                ICSharpCode.SharpZipLib.BZip2.BZip2.Compress(input, output, 1024);
+                input.Flush();
+                byte[] out_data = output.GetBuffer();
+                file_list_bz2 = out_data;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error compressing file list: " + ex.Message);
+                file_list_bz2 = null;
+            }
         }
         protected string cid = "D2QLOGUYDX3QA";
         public string CID
@@ -418,7 +517,6 @@ namespace DCPlusPlus
             public List<SharingEntry> files = new List<SharingEntry>();
             public List<DirectoryContents> directories = new List<DirectoryContents>();
         }
- 
         private static string ToXmlString(string org)
         {
             if (String.IsNullOrEmpty(org)) return ("");
@@ -571,96 +669,32 @@ namespace DCPlusPlus
         }
         public string GetFileListXml()
         {
-            string xml = "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n";
-            xml += "<FileListing Version=\"1\" CID=\""+cid+"\" Base=\"/\" Generator=\""+generator+"\">\n";
-            //hierarchical tree that lists all directories that have
-            // 1. a shared file in it
-            // 2. at least two directories in it that have shared files in its tree
-            //use DirectoryContents class to hold data structure
-            //combine directoryContents to xml string
-            //return xml string
-            DirectoryContents root = new DirectoryContents();
-            FillDirectories(root);
-            if (!CleanDirectories(root)) return (""); //empty shares
-            xml += GetDirectoryContentsString(root);
-            xml += "</FileListing>\n";
-            return (xml);
+            if (file_list_needs_update)
+                UpdateFileLists();
+            return (file_list);
         }
         public byte[] GetFileListXmlBZ2()
         {
-            try
-            {
-                string file_list = GetFileListXml();
-                MemoryStream input = new MemoryStream(System.Text.Encoding.Default.GetBytes(file_list));
-                MemoryStream output = new MemoryStream();
-                ICSharpCode.SharpZipLib.BZip2.BZip2.Compress(input, output, 1024);
-                input.Flush();
-                byte[] out_data = output.GetBuffer();
-                //string hubs_string = System.Text.Encoding.Default.GetString(out_data);
-                return (out_data);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error compressing file list: "+ex.Message);
-                return (null);
-            }
+            if (file_list_needs_update)
+                UpdateFileLists();
+            return(file_list_bz2);
         }
-
 
         #region ICollection<SharingEntry> Members
-
-        public void Add(SharingEntry item)
-        {
-            lock (share_lock)
-            {
-                items.Add(item);
-            }
-            try
-            {
-                if (EntryAdded != null)
-                    EntryAdded(item);
-                if (EntriesChanged != null)
-                    EntriesChanged();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Exception occured in added event callback: " + ex.Message);
-            }
-        }
-
-        public void Clear()
-        {
-            try
-            {
-
-                if (EntriesCleared != null)
-                    EntriesCleared();
-                if (EntriesChanged != null)
-                    EntriesChanged();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Exception occured in clear event callback: " + ex.Message);
-            }
-            lock (share_lock)
-            {
-                items.Clear();
-            }
-        }
-
         public bool Contains(SharingEntry item)
         {
+            bool ret = false;
             lock (share_lock)
             {
-                return (items.Contains(item));
+                ret = items.Contains(item);
             }
+            return (ret);
         }
 
         public void CopyTo(SharingEntry[] array, int arrayIndex)
         {
             lock (share_lock)
             {
-
                 foreach (SharingEntry entry in items)
                 {
                     array.SetValue(entry, arrayIndex);
@@ -678,24 +712,6 @@ namespace DCPlusPlus
             }
         }
 
-        public bool Remove(SharingEntry item)
-        {
-            try
-            {
-                if (EntryRemoved != null)
-                    EntryRemoved(item);
-                if (EntriesChanged != null)
-                    EntriesChanged();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Exception occured in remove event callback: " + ex.Message);
-            }
-            lock (share_lock)
-            {
-                return (items.Remove(item));
-            }
-        }
 
         #endregion
         #region IEnumerable<SharingEntry> Members
