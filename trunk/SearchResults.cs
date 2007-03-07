@@ -6,21 +6,54 @@ using System.Text;
 
 namespace DCPlusPlus
 {
+    /// <summary>
+    /// A list of search results class
+    /// </summary>
     public class SearchResults
     {
         //TODO deprecate this ;-)
-        public delegate void ResultsChangedEventHandler(object sender, int num_results);
+        /// <summary>
+        /// Prototype for the Results Changed Event Handler
+        /// (soon to be deprecated)
+        /// </summary>
+        /// <param name="s_results">the search results that were changed</param>
+        /// <param name="num_results">number of results in the search results list</param>
+        public delegate void ResultsChangedEventHandler(SearchResults s_results, int num_results);
+        /// <summary>
+        /// Event handler that gets called
+        /// when the search results list was changed
+        /// </summary>
         public event ResultsChangedEventHandler ResultsChanged;
-
-        public delegate void ResultsClearedEventHandler(object sender);
+        /// <summary>
+        /// Prototype for the Results Cleared Event Handler
+        /// </summary>
+        /// <param name="s_results">the search results that were cleared</param>
+        public delegate void ResultsClearedEventHandler(SearchResults s_results);
+        /// <summary>
+        /// Event handler that gets called
+        /// when the search results were cleared
+        /// </summary>
         public event ResultsClearedEventHandler ResultsCleared;
-
-        public delegate void ResultAddedEventHandler(object sender, SearchResult result);
+        /// <summary>
+        /// Prototype for the Result Added Event Handler
+        /// </summary>
+        /// <param name="s_results">the search results to which a result was added</param>
+        /// <param name="result">the added search result</param>
+        public delegate void ResultAddedEventHandler(SearchResults s_results, SearchResult result);
+        /// <summary>
+        /// Event handler that gets called
+        /// when a result was added the search results list
+        /// </summary>
         public event ResultAddedEventHandler ResultAdded;
-
+        /// <summary>
+        /// array of search terms (space seperated words of the orignal search term)
+        /// </summary>
         private string[] search_terms;
 
         protected string search_term = "";
+        /// <summary>
+        /// Get/Set the term to search for
+        /// </summary>
         public string SearchTerm
         {
             get
@@ -37,6 +70,11 @@ namespace DCPlusPlus
         }
 
         protected bool discard_old_results = false;
+        /// <summary>
+        /// Set this to TRUE to automatically discard old 
+        /// search results received after starting a new search
+        /// (TODO check if tth sources of others downloads wont be skipped too)
+        /// </summary>
         public bool DiscardOldResults 
         {
             get
@@ -48,7 +86,11 @@ namespace DCPlusPlus
                 discard_old_results = value;
             }
         }
-
+        /// <summary>
+        /// A class to hold the values
+        /// read from a search result line orignating from
+        /// a hub or was received via udp
+        /// </summary>
         public class SearchResult
         {
             //public delegate bool OnHubResolveHandler(object sender, string hub_address);
@@ -57,6 +99,9 @@ namespace DCPlusPlus
 
             //TODO change this to a queue.queueentry.source
             protected string filename = "";
+            /// <summary>
+            /// the filename of the search result
+            /// </summary>
             public string Filename
             {
                 get
@@ -64,8 +109,10 @@ namespace DCPlusPlus
                     return (filename);
                 }
             }
-
             protected string user_name = "";
+            /// <summary>
+            /// the username of the user who sent the search result
+            /// </summary>
             public string UserName
             {
                 get
@@ -73,7 +120,9 @@ namespace DCPlusPlus
                     return (user_name);
                 }
             }
-
+            /// <summary>
+            /// read the search result values from a result line
+            /// </summary>
             private void SplitResultLine()
             {
                 /*
@@ -211,8 +260,10 @@ namespace DCPlusPlus
 
 
             }
-
             protected string result_line;
+            /// <summary>
+            /// Set the Result Line received via hub or udp
+            /// </summary>
             public string ResultLine
             {
                 set
@@ -222,8 +273,10 @@ namespace DCPlusPlus
 
                 }
             }
-
             protected bool is_hub_resolved = false;
+            /// <summary>
+            /// TRUE if a hub was resolved from the hub address
+            /// </summary>
             public bool IsHubResolved
             {
                 get
@@ -231,8 +284,10 @@ namespace DCPlusPlus
                     return (is_hub_resolved);
                 }
             }
-
             protected string hub_address="";
+            /// <summary>
+            /// Get the hub address
+            /// </summary>
             public string HubAddress
             {
                 get
@@ -242,7 +297,9 @@ namespace DCPlusPlus
                         //is_hub_resolved = OnHubResolve(this, hub_address);
                 }
             }
-
+            /// <summary>
+            /// TRUE if the result is a file
+            /// </summary>
             public bool IsFile
             {
                 get
@@ -250,8 +307,10 @@ namespace DCPlusPlus
                     return (!is_directory);
                 }
             }
-
             protected bool is_directory = false;
+            /// <summary>
+            /// TRUE if the result is a directory
+            /// </summary>
             public bool IsDirectory
             {
                 get
@@ -259,8 +318,10 @@ namespace DCPlusPlus
                     return (is_directory);
                 }
             }
-
             protected string directory = "";
+            /// <summary>
+            /// the directory name of the search result
+            /// </summary>
             public string Directory
             {
                 get
@@ -268,8 +329,10 @@ namespace DCPlusPlus
                     return (directory);
                 }
             }
-
             protected string file_extension = "";
+            /// <summary>
+            /// the file extension if the result is a file
+            /// </summary>
             public string FileExtension
             {
                 get
@@ -277,8 +340,10 @@ namespace DCPlusPlus
                     return (file_extension);
                 }
             }
-
             protected int filesize = 0;
+            /// <summary>
+            /// the file size if the result is a file
+            /// </summary>
             public int Filesize
             {
                 get
@@ -286,7 +351,9 @@ namespace DCPlusPlus
                     return (filesize);
                 }
             }
-
+            /// <summary>
+            /// TRUE if the search result has a tth included
+            /// </summary>
             public bool HasTTH
             {
                 get
@@ -294,8 +361,10 @@ namespace DCPlusPlus
                     return (!string.IsNullOrEmpty(tth));
                 }
             }
-
             protected string tth = "";
+            /// <summary>
+            /// the base32 encoded tth of the search result
+            /// </summary>
             public string TTH
             {
                 get
@@ -303,8 +372,10 @@ namespace DCPlusPlus
                     return (tth);
                 }
             }
-        
             protected string hub_name="";
+            /// <summary>
+            /// the name of the hub the user is connected to 
+            /// </summary>
             public string HubName
             {
                 get
@@ -312,8 +383,10 @@ namespace DCPlusPlus
                     return (hub_name);
                 }
             }
-
             protected int free_slots = 0;
+            /// <summary>
+            /// the number of free slots the user has to offer
+            /// </summary>
             public int FreeSlots
             {
                 get
@@ -321,8 +394,10 @@ namespace DCPlusPlus
                     return (free_slots);
                 }
             }
-
             protected int total_slots = 0;
+            /// <summary>
+            /// the total number of slots the user has to offer
+            /// </summary>
             public int TotalSlots
             {
                 get
@@ -330,7 +405,11 @@ namespace DCPlusPlus
                     return (total_slots);
                 }
             }
-
+            /// <summary>
+            /// TRUE if the search result has a hub 
+            /// (to be found by the client in his connected hubs list)
+            /// (seems to be redudant with is_hub_resolved)
+            /// </summary>
             public bool HasHub
             {
                 get
@@ -338,8 +417,10 @@ namespace DCPlusPlus
                     return (hub!=null);
                 }
             }
-
             protected Hub hub=null;
+            /// <summary>
+            /// the hub on which the user that send us the search result is connected to
+            /// </summary>
             public Hub Hub
             {
                 get
@@ -353,24 +434,35 @@ namespace DCPlusPlus
                     hub = value;
                 }
             }
-
+            /// <summary>
+            /// SearchResult Constructor
+            /// </summary>
             public SearchResult()
             {
 
             }
-
+            /// <summary>
+            /// SearchResult Constructor
+            /// initializing the result parameters
+            /// </summary>
+            /// <param name="result_parameter_line">the search result parameters</param>
             public SearchResult(string result_parameter_line)
             {
                 result_line = result_parameter_line;
                 SplitResultLine();
             }
         }
-
+        /// <summary>
+        /// SearchResults Constructor
+        /// </summary>
         public SearchResults()
         {
             
         }
-
+        /// <summary>
+        /// the SearchResults lock to make
+        /// this class thread safe
+        /// </summary>
         protected Object results_lock = new Object();
         /*public Object ResultsLock
         {
@@ -383,8 +475,11 @@ namespace DCPlusPlus
                 results_lock = value;
             }
         }*/
-
         protected List<SearchResult> results = new List<SearchResult>();
+        /// <summary>
+        /// A list of search results
+        /// (TODO to be deprecated and replaced with an enumerator)
+        /// </summary>
         public List<SearchResult> Results
         {
             get
@@ -392,7 +487,10 @@ namespace DCPlusPlus
                 return (results);
             }
         }
-
+        /// <summary>
+        /// Add a search result to the results list
+        /// </summary>
+        /// <param name="result">the result to be added</param>
         public void AddResult(SearchResult result)
         {
 
@@ -439,7 +537,10 @@ namespace DCPlusPlus
             }
 
         }
-
+        /// <summary>
+        /// Remove a search result from the results list
+        /// </summary>
+        /// <param name="result">the search result to remove</param>
         public void RemoveResult(SearchResult result)
         {
             lock (results_lock)
@@ -457,8 +558,9 @@ namespace DCPlusPlus
             }
 
         }
-
-
+        /// <summary>
+        /// Clear all results from the results list
+        /// </summary>
         public void ClearResults()
         {
             search_term = "";

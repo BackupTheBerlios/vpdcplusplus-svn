@@ -13,9 +13,19 @@ namespace DCPlusPlus
      * oncommandhandler etc
      */
 
+
+    /// <summary>
+    /// Basic Class for Peer and Hub Connections
+    /// Contains properties and methods used by both
+    /// to reduce redundancy
+    /// </summary>
     public abstract class Connection
     {
         protected bool is_extended_protocol = false;
+        /// <summary>
+        /// Returns TRUE if the other side
+        /// supports DC++ Extensions ($support comand)
+        /// </summary>
         public bool IsExtendedProtocol
         {
             get
@@ -25,6 +35,10 @@ namespace DCPlusPlus
 
         }
         protected string nick = "unknown";
+        /// <summary>
+        /// Get/Set your own Nickname (gets transfered via $Nick 
+        /// during handshake of the connection)
+        /// </summary>
         public string Nick
         {
             get
@@ -38,6 +52,9 @@ namespace DCPlusPlus
         }
         //TODO change is_connected etc to a state enum 
         protected bool is_connected = false;
+        /// <summary>
+        ///  Returns TRUE if Peer/Hub is connected
+        /// </summary>
         public bool IsConnected
         {
             get
@@ -47,6 +64,9 @@ namespace DCPlusPlus
 
         }
         protected bool is_connecting = false;
+        /// <summary>
+        /// Returns TRUE if Peer/Hub is still connecting
+        /// </summary>
         public bool IsConnecting
         {
             get
@@ -56,6 +76,9 @@ namespace DCPlusPlus
 
         }
         protected string ip = "";
+        /// <summary>
+        /// Get/Set ip address of the remote end of the connection
+        /// </summary>
         public string IP
         {
             get
@@ -68,6 +91,9 @@ namespace DCPlusPlus
             }
         }
         protected int port = 0;
+        /// <summary>
+        /// Get/Set port of the remote end of the connection
+        /// </summary>
         public int Port
         {
             get
@@ -79,13 +105,34 @@ namespace DCPlusPlus
                 port = value;
             }
         }
+        /// <summary>
+        /// The Socket used for all Peer/Hub communications
+        /// </summary>
         protected Socket socket = null;
+        /// <summary>
+        /// The Receive buffer used by socket 
+        /// </summary>
         protected byte[] receive_buffer = null;
+        /// <summary>
+        /// Prototype for the Disconnect method 
+        /// used in the Peer/Hub classes
+        /// </summary>
         public abstract void Disconnect();
+        /// <summary>
+        /// Send a command without parameters
+        /// (for example $Send)
+        /// </summary>
+        /// <param name="command">the command to send</param>
         public void SendCommand(string command)
         {
             SendCommand(command, "");
         }
+        /// <summary>
+        /// Send a command with a parameter
+        /// (for example $Nick test)
+        /// </summary>
+        /// <param name="command">the command to send</param>
+        /// <param name="parameter">the parameter of the command</param>
         public void SendCommand(string command, string parameter)
         {
             if (!string.IsNullOrEmpty(parameter))
@@ -93,6 +140,12 @@ namespace DCPlusPlus
             else
                 SendCommand(command, new string[0]);
         }
+        /// <summary>
+        /// Send a command with parameters
+        /// (for example $SR filename filesize etc)
+        /// </summary>
+        /// <param name="command">the command to send</param>
+        /// <param name="parameters">array of parameters of the command</param>
         public void SendCommand(string command, string[] parameters)
         {
             if (socket != null)
@@ -117,6 +170,11 @@ namespace DCPlusPlus
                 }
             }
         }
+        /// <summary>
+        /// Async Callback for SendCommand
+        /// (gets called when the send is completed)
+        /// </summary>
+        /// <param name="ar">Async Result/State </param>
         protected void SendCommandCallback(IAsyncResult ar)
         {
             Socket send_command_socket = (Socket)ar.AsyncState;
@@ -132,6 +190,9 @@ namespace DCPlusPlus
             }
         }
         protected string[] supports=new string[0];
+        /// <summary>
+        /// Array of supported extensions by the remote side
+        /// </summary>
         public string[] Supports
         {
             get
@@ -139,6 +200,15 @@ namespace DCPlusPlus
                 return (supports);
             }
         }
+        /// <summary>
+        /// Check if an extension is
+        /// supported by the remote side
+        /// </summary>
+        /// <param name="extension">
+        /// String containing the extension you 
+        /// want to check for
+        /// </param>
+        /// <returns>Returns TRUE if the extension is supported</returns>
         public bool CheckForExtension(string extension)
         {
             foreach (string supported_extension in supports)
@@ -148,6 +218,9 @@ namespace DCPlusPlus
             }
             return (false);
         }
+        /// <summary>
+        /// Enumeration of possible Connection ErrorCodes
+        /// </summary>
         public enum ErrorCodes
         {
             UnableToConnect, Exception,UnknownException,NoFreeSlots,
@@ -158,6 +231,9 @@ namespace DCPlusPlus
 
         }
         protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
+        /// <summary>
+        /// Get the error code of a connection
+        /// </summary>
         public Connection.ErrorCodes ErrorCode
         {
             get
@@ -165,9 +241,8 @@ namespace DCPlusPlus
                 return (error_code);
             }
         }
+
         #region LockToKey
-
-
         /*
  * This LockToKey does NOT use Microsoft.VisualBasic as a reference 
  * also strips $Lock and Pk=
@@ -308,7 +383,12 @@ namespace DCPlusPlus
 
 
 
-
+        /// <summary>
+        /// Convert a Lock to a Key
+        /// shamelessly grabbed from the dcpp dev wiki
+        /// </summary>
+        /// <param name="lck">the connections lock</param>
+        /// <returns>a hopefully valid key</returns>
         protected string LockToKey(string lck)
         {
             string Key = "";
@@ -382,7 +462,12 @@ namespace DCPlusPlus
         }
         */
 
-
+        /// <summary>
+        /// Convert a Lock to a Key (personal version)
+        /// (broken somehow)
+        /// </summary>
+        /// <param name="key">the connections lock</param>
+        /// <returns>a hopefully valid key</returns>
         public string MyLockToKey(string key)
         {
             byte[] decoded_key_buffer = new byte[key.Length]; //so we have an exact duplicate in length
@@ -432,6 +517,14 @@ namespace DCPlusPlus
             return (decoded_key);
         }
         #endregion
+        /// <summary>
+        /// Creates a key used during handshake
+        /// </summary>
+        /// <param name="extended">
+        /// TRUE if you want to tell the
+        /// remote side that we are supporting DC++ extensions
+        /// </param>
+        /// <returns>String containing a valid key</returns>
         protected string CreateKey(bool extended)
         {
             string key = "";

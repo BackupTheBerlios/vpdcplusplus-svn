@@ -11,16 +11,48 @@ using System.IO;
 
 namespace DCPlusPlus
 {
+    /// <summary>
+    /// a simple class
+    /// to check for open ports
+    /// (uses a third party webpage for this)
+    /// </summary>
     [TestFixture]
     public class PortCheck
     {
+        /// <summary>
+        /// Event handler that gets called
+        /// when a open ports check was completed
+        /// </summary>
         public event CompletedEventHandler Completed;
+        /// <summary>
+        /// Event handler that gets called
+        /// when the progress of the port check changed
+        /// </summary>
         public event ProgressChangedEventHandler ProgressChanged;
+        /// <summary>
+        /// Event handler that gets called
+        /// when the port check was unable to complete
+        /// </summary>
         public event UnableToFetchEventHandler UnableToFetch;
+        /// <summary>
+        /// Prototype for the Completed Event Handler
+        /// </summary>
+        /// <param name="ex_ip"></param>
         public delegate void CompletedEventHandler(PortCheck ex_ip);
+        /// <summary>
+        /// Prototype for the Progress Changed Event Handler
+        /// </summary>
+        /// <param name="ex_ip"></param>
         public delegate void ProgressChangedEventHandler(PortCheck ex_ip);
+        /// <summary>
+        /// Prototype for the Unable To Fetch Event Handler
+        /// </summary>
+        /// <param name="ex_ip"></param>
         public delegate void UnableToFetchEventHandler(PortCheck ex_ip);
         protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
+        /// <summary>
+        /// Contains the error code if something went wrong with the open ports check
+        /// </summary>
         public Connection.ErrorCodes ErrorCode
         {
             get
@@ -29,6 +61,9 @@ namespace DCPlusPlus
             }
         }
         protected int percentage = 0;
+        /// <summary>
+        /// Get the progress percentage of the open ports check
+        /// </summary>
         public int Percentage
         {
             get
@@ -36,12 +71,22 @@ namespace DCPlusPlus
                 return (percentage);
             }
         }
+        /// <summary>
+        /// enumeration of possible 
+        /// open ports combinations
+        /// </summary>
         public enum Ports
         {
             UdpAndTcp,Udp,Tcp,None
         };
+        /// <summary>
+        /// Get the open Ports that the test found
+        /// </summary>
         public Ports OpenPorts = Ports.None;
         protected string my_ip;
+        /// <summary>
+        /// Get/Set the ip to check the ports for
+        /// </summary>
         public string MyIP
         {
             get
@@ -55,6 +100,9 @@ namespace DCPlusPlus
 
         }
         protected string my_client_name="c#++";
+        /// <summary>
+        /// Get/Set the client name we want to send to the ports checking service
+        /// </summary>
         public string MyClientName
         {
             get
@@ -68,6 +116,9 @@ namespace DCPlusPlus
 
         }
         protected int my_udp_port;
+        /// <summary>
+        /// Get/Set the udp port to check
+        /// </summary>
         public int MyUdpPort
         {
             get
@@ -81,6 +132,9 @@ namespace DCPlusPlus
 
         }
         protected int my_tcp_port;
+        /// <summary>
+        /// Get/set the tcp port to check
+        /// </summary>
         public int MyTcpPort
         {
             get
@@ -94,6 +148,9 @@ namespace DCPlusPlus
 
         }
         protected bool busy = false;
+        /// <summary>
+        /// TRUE if an open ports check if running
+        /// </summary>
         public bool IsBusy
         {
             get
@@ -101,7 +158,13 @@ namespace DCPlusPlus
                 return (busy);
             }
         }
+        /// <summary>
+        /// our webclient we use to communicate with the p2p-ports service
+        /// </summary>
         private WebClient wc = new WebClient();
+        /// <summary>
+        /// PortCheck Constructor
+        /// </summary>
         public PortCheck()
         {
             my_ip = "";
@@ -109,7 +172,13 @@ namespace DCPlusPlus
             wc.DownloadDataCompleted += new DownloadDataCompletedEventHandler(DownloadFileCallback);
 
         }
+        /// <summary>
+        /// our url to the port checking service we are using
+        /// </summary>
         private string url = "http://connect.majestyc.net/";
+        /// <summary>
+        /// Start checking of open ports
+        /// </summary>
         public void CheckPorts()
         {
             if (!busy)
@@ -129,7 +198,10 @@ namespace DCPlusPlus
             }
 
         }
-        public void AbortFetch()
+        /// <summary>
+        /// Abort checking
+        /// </summary>
+        public void AbortCheck()
         {
             if (busy)
             {
@@ -147,6 +219,12 @@ namespace DCPlusPlus
                 busy = false;
             }
         }
+        /// <summary>
+        /// Async callback for webclients get file operation
+        /// ,gets called if the file was retrieved successfully
+        /// </summary>
+        /// <param name="sender">event sending webclient instance</param>
+        /// <param name="e">event arguments of the download operation</param>
         private void DownloadFileCallback(object sender, DownloadDataCompletedEventArgs e)
         {
             try
@@ -198,6 +276,12 @@ namespace DCPlusPlus
 
             }
         }
+        /// <summary>
+        /// Async callback for webclients get file operation
+        /// ,gets called when the progress of the download changes
+        /// </summary>
+        /// <param name="sender">event sending webclient instance</param>
+        /// <param name="e">event arguments of the download operation</param>
         private void DownloadProgressCallback(object sender, DownloadProgressChangedEventArgs e)
         {
             percentage = e.ProgressPercentage;
@@ -205,6 +289,9 @@ namespace DCPlusPlus
                 ProgressChanged(this);
         }
 #region Unit Testing
+        /// <summary>
+        /// Test to see if our port checking method works
+        /// </summary>
         [Test]
         public void TestCheck()
         {
@@ -249,6 +336,9 @@ namespace DCPlusPlus
             Console.WriteLine("PortCheck open ports Test successful.");
 
         }
+        /// <summary>
+        /// Test to see if our local ports are available to the outside world
+        /// </summary>
         [Test]
         public void TestCheckRunningLocalPeers()
         {
@@ -274,6 +364,8 @@ namespace DCPlusPlus
                 {
                     Console.WriteLine("");
                     Console.WriteLine("Check Completed (open ports : " + Enum.GetName(typeof(Ports), port_check_completed.OpenPorts) + ")");
+                    if(port_check_completed.OpenPorts == Ports.None || port_check_completed.OpenPorts == Ports.Udp)
+                        Assert.Fail("Test failed: tcp port not open!");
                     wait = false;
                 };
                 port_check.CheckPorts();
@@ -297,6 +389,10 @@ namespace DCPlusPlus
             Console.WriteLine("PortCheck running open ports Test successful.");
 
         }
+        /// <summary>
+        /// Test to see if a failed check will not crash the client
+        /// or throw unexpected exceptions
+        /// </summary>
         [Test]
         public void TestCheckFailed()
         {

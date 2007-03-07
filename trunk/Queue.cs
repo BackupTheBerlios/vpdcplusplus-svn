@@ -463,7 +463,14 @@ namespace DCPlusPlus
             {
                 if (File.Exists(output_filename))
                 {
-                    File.Delete(output_filename);
+                    try
+                    {
+                        File.Delete(output_filename);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Error deleting file: "+ output_filename);
+                    }
                 }
             }
 

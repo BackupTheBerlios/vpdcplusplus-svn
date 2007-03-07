@@ -7,13 +7,33 @@ using System.Threading;
 
 namespace DCPlusPlus
 {
+    /// <summary>
+    /// creates a local bound udp socket
+    /// and tcp socket to accept connections/packets
+    /// fires events upon a connected peer
+    /// or a search result received via udp
+    /// </summary>
     public class ListeningSockets
     {
-        public delegate void SearchResultEventHandler(SearchResults.SearchResult result);
-        public event SearchResultEventHandler SearchResultReceived;
+        /// <summary>
+        /// Prototype for the Search Result Received Event Handler
+        /// </summary>
+        /// <param name="result">the search result received via udp</param>
+        public delegate void SearchResultReceivedEventHandler(SearchResults.SearchResult result);
+        /// <summary>
+        /// Event handler that gets called
+        /// when a search result was received via udp
+        /// </summary>
+        public event SearchResultReceivedEventHandler SearchResultReceived;
+        /// <summary>
+        /// Event handler that gets called
+        /// when a peer connected to our local tcp listener
+        /// </summary>
         public event Peer.ConnectedEventHandler PeerConnected;
-
         protected string ip = "";
+        /// <summary>
+        /// the internal ip address
+        /// </summary>
         public string IP
         {
             get
@@ -22,6 +42,10 @@ namespace DCPlusPlus
             }
         }
         protected string external_ip = "";
+        /// <summary>
+        /// the external ip address
+        /// (TODO move this to a more suitable place like the Client class)
+        /// </summary>
         public string ExternalIP
         {
             get
@@ -33,7 +57,11 @@ namespace DCPlusPlus
                 external_ip = value;
             }
         }
-        protected int tcp_port = 0;
+        protected int tcp_port = 0;//TODO change this to a certain port as default,else we may clutter up a routers upnp port mappings
+        /// <summary>
+        /// the tcp port we want to use 
+        /// set to 0 for automatic free port selection of the os
+        /// </summary>
         public int TcpPort
         {
             get
@@ -46,6 +74,10 @@ namespace DCPlusPlus
             }
         }
         protected int udp_port = 0;
+        /// <summary>
+        /// the udp port we want to use 
+        /// set to 0 for automatic free port selection of the os
+        /// </summary>
         public int UdpPort
         {
             get
@@ -58,7 +90,10 @@ namespace DCPlusPlus
             }
 
         }
-        protected int max_tcp_connections = 10;
+        protected int max_tcp_connections = 100;
+        /// <summary>
+        /// Maximum number of tcp connections in listening queue before discarding them
+        /// </summary>
         public int MaxTcpConnections
         {
             get
@@ -70,7 +105,12 @@ namespace DCPlusPlus
                 max_tcp_connections = value;
             }
         }
-        protected int max_udp_connections = 10;
+        /* this is one for the books lol a max connections int for a connectionless protocol
+         * think first before writing ;-)
+        protected int max_udp_connections = 100;
+        /// <summary>
+        /// 
+        /// </summary>
         public int MaxUdpConnections
         {
             get
@@ -82,6 +122,10 @@ namespace DCPlusPlus
                 max_udp_connections = value;
             }
         }
+        
+        /// <summary>
+        /// 
+        /// </summary>
         public int MaxConnections
         {
             get
@@ -93,16 +137,32 @@ namespace DCPlusPlus
                 max_udp_connections = value / 2;
                 max_tcp_connections = value / 2;
             }
-        }
+        }*/
+        /// <summary>
+        /// ListeningSockets Constructor
+        /// (Gets the local ip and sets up 
+        /// the local tcp and udp socket)
+        /// </summary>
         public ListeningSockets()
         {
+            UpdateIP();
             SetupListeningSocket();
         }
-        ~ListeningSockets()
+        /// <summary>
+        /// Updates the local ip address
+        /// stores it in the IP property
+        /// </summary>
+        private void UpdateIP()
         {
-            CloseListeningSocket();
+            string host_name = Dns.GetHostName();
+            IPHostEntry host_entry = Dns.GetHostEntry(host_name);
+            if (host_entry.AddressList.Length == 0) return;//computer has not one network interface ;-( i bet this one will never a case anywhere, but better catch it *g*
+            ip = host_entry.AddressList[0].ToString();
         }
         protected bool listening = false;
+        /// <summary>
+        /// TRUE if we bound our local sockets and we are listening for packets/connections
+        /// </summary>
         public bool IsListening
         {
             get
@@ -110,21 +170,60 @@ namespace DCPlusPlus
                 return (listening);
             }
         }
+        /// <summary>
+        /// the tcp_socket we bind to our local port
+        /// specified with TcpPort
+        /// </summary>
         private Socket tcp_socket = null;
+        /// <summary>
+        /// the result of socket.BeginAccept
+        /// [unused at the moment]
+        /// </summary>
         private IAsyncResult tcp_callback = null;
+        /// <summary>
+        /// the udp_socket we bind to our local port
+        /// specified with UdpPort
+        /// </summary>
         private Socket udp_socket = null;
+        /// <summary>
+        /// the udp sockets receive buffer
+        /// </summary>
         private byte[] receive_from_buffer = new byte[1024];
+        /// <summary>
+        /// stores the ip address information of a received packet
+        /// [unused]
+        /// </summary>
         private IPEndPoint receive_from_endpoint = new IPEndPoint(IPAddress.None, 0);
+        /// <summary>
+        /// Updates the sockets,
+        /// needs to be called
+        /// after the ports have changed
+        /// </summary>
         public void UpdateConnectionSettings()
         {
             if (listening)
                 CloseListeningSocket();
             SetupListeningSocket();
         }
+        /// <summary>
+        /// 
+        /// TODO, heard some rumors that deconstructors are not supported
+        /// </summary>
+        ~ListeningSockets()
+        {
+            CloseListeningSocket();
+        }
+        /// <summary>
+        /// Just another name for CloseListeningSockets()
+        /// </summary>
         public void Close()
         {
             CloseListeningSocket();
         }
+        /// <summary>
+        /// Close the udp and tcp socket
+        /// and stop listening for packets/connections
+        /// </summary>
         private void CloseListeningSocket()
         {
             //close the listening socket if openened
@@ -167,7 +266,14 @@ namespace DCPlusPlus
                 }
             }
         }
+        /// <summary>
+        /// lock used to make this class thread safe
+        /// </summary>
         private object listening_lock = new Object();
+        /// <summary>
+        /// Open the tcp and udp ports
+        /// and start listen for packets and connections
+        /// </summary>
         private void SetupListeningSocket()
         {
             //if ip is nullorempty
@@ -183,35 +289,54 @@ namespace DCPlusPlus
                     listening = true;
                     if (tcp_socket == null)
                     {
-                        tcp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                        IPEndPoint tcp_local_endpoint = new IPEndPoint(IPAddress.Any, tcp_port);
-                        tcp_socket.Bind(tcp_local_endpoint);
-                        tcp_port = ((IPEndPoint)tcp_socket.LocalEndPoint).Port;
-                        tcp_socket.Blocking = false;
-                        //tcp_socket.LingerState = new LingerOption(false, 0);
-                        tcp_socket.Listen(max_tcp_connections);
-                        AsyncCallback event_accept = new AsyncCallback(OnAccept);
-                        tcp_callback = tcp_socket.BeginAccept(event_accept, tcp_socket);
-                        Console.WriteLine("Bound listening tcp socket to port: " + tcp_port);
+                        try
+                        {
+                            tcp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                            IPEndPoint tcp_local_endpoint = new IPEndPoint(IPAddress.Any, tcp_port);
+                            tcp_socket.Bind(tcp_local_endpoint);
+                            tcp_port = ((IPEndPoint)tcp_socket.LocalEndPoint).Port;
+                            tcp_socket.Blocking = false;
+                            //tcp_socket.LingerState = new LingerOption(false, 0);
+                            tcp_socket.Listen(max_tcp_connections);
+                            AsyncCallback event_accept = new AsyncCallback(OnAccept);
+                            tcp_callback = tcp_socket.BeginAccept(event_accept, tcp_socket);
+                            Console.WriteLine("Bound listening tcp socket to port: " + tcp_port);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Exception opening local peer tcp port");
+                        }
                     }
                     else Console.WriteLine("tcp port already in use :" + tcp_port);
                     if (udp_socket == null)
                     {
-                        udp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                        IPEndPoint udp_local_endpoint = new IPEndPoint(IPAddress.Any, udp_port);
-                        udp_socket.Bind(udp_local_endpoint);
-                        udp_port = ((IPEndPoint)udp_socket.LocalEndPoint).Port;
-                        udp_socket.Blocking = false;
-                        //udp_socket.LingerState = new LingerOption(false, 0);
-                        EndPoint temp_receive_from_endpoint = (EndPoint)receive_from_endpoint;
-                        AsyncCallback event_receive_from = new AsyncCallback(OnReceiveFrom);
-                        udp_socket.BeginReceiveFrom(receive_from_buffer, 0, receive_from_buffer.Length, SocketFlags.None, ref temp_receive_from_endpoint, event_receive_from, udp_socket);
-                        Console.WriteLine("Bound UDP-Channel to port: " + udp_port);
+                        try
+                        {
+                            udp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                            IPEndPoint udp_local_endpoint = new IPEndPoint(IPAddress.Any, udp_port);
+                            udp_socket.Bind(udp_local_endpoint);
+                            udp_port = ((IPEndPoint)udp_socket.LocalEndPoint).Port;
+                            udp_socket.Blocking = false;
+                            //udp_socket.LingerState = new LingerOption(false, 0);
+                            EndPoint temp_receive_from_endpoint = (EndPoint)receive_from_endpoint;
+                            AsyncCallback event_receive_from = new AsyncCallback(OnReceiveFrom);
+                            udp_socket.BeginReceiveFrom(receive_from_buffer, 0, receive_from_buffer.Length, SocketFlags.None, ref temp_receive_from_endpoint, event_receive_from, udp_socket);
+                            Console.WriteLine("Bound UDP-Channel to port: " + udp_port);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Exception opening local peer udp port");
+                        }
+
                     }
                     else Console.WriteLine("udp port already in use :" + udp_port);
                 }
             }
         }
+        /// <summary>
+        /// Callback to receive udp packets
+        /// </summary>
+        /// <param name="result">Async Result/State</param>
         private void OnReceiveFrom(IAsyncResult result)
         {
             if (udp_socket != null)
@@ -264,6 +389,14 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("ReceiveFrom on udp socket aborted.");
         }
+        /// <summary>
+        /// Interpret a received string.
+        /// this will split the string into single commands and
+        /// call InterpretCommand() with them
+        /// (TODO maybe add a received string buffer to fight incomplete packets
+        ///  ,but its complicated . it would need a buffer for each ip:port combo,not very practical)
+        /// </summary>
+        /// <param name="received_string">the data received via udp</param>
         private void InterpretReceivedString(string received_string)
         {
             // possible strings
@@ -279,6 +412,11 @@ namespace DCPlusPlus
             }
          
         }
+        /// <summary>
+        /// Interpret a single command 
+        /// in this case only $SR search results received via udp
+        /// </summary>
+        /// <param name="received_command">the command to interpret</param>
         private void InterpretCommand(string received_command)
         {
             int command_end = received_command.IndexOf(" ");
@@ -315,6 +453,10 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Error interpreting command: " + received_command);
         }
+        /// <summary>
+        /// Callback to accept tcp connections
+        /// </summary>
+        /// <param name="result">Async Result/State</param>
         private void OnAccept(IAsyncResult result)
         {
             if (tcp_socket != null)
@@ -369,7 +511,15 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Accept on tcp socket aborted.");
         }
-        public void SearchReply(string result_name,long filesize,Hub hub, Hub.SearchParameters search)
+        /// <summary>
+        /// Reply to a search from a user via udp
+        /// (active connection of peer user required)
+        /// </summary>
+        /// <param name="result_name">the filename of the share found</param>
+        /// <param name="filesize">the filesize of the share</param>
+        /// <param name="hub">the hub the user is connected to</param>
+        /// <param name="search">a whole lot of parameters of the search initiated by a remote user (including ip and port,which we will need here)</param>
+        public void SearchReply(string result_name, long filesize, Hub hub, Hub.SearchParameters search)
         {
             try
             {
@@ -388,6 +538,10 @@ namespace DCPlusPlus
                 Console.WriteLine("Exception during sending of SearchReply to: "+search.ip+":"+search.port+" : "+ex.Message);
             }
         }
+        /// <summary>
+        /// Callback for SearchReply async send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
         protected void SearchReplyCallback(IAsyncResult ar)
         {
             Socket search_reply_socket = (Socket)ar.AsyncState;

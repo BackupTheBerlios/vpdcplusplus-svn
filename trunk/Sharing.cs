@@ -14,12 +14,24 @@ using ICSharpCode.SharpZipLib;
 
 namespace DCPlusPlus
 {
+    /// <summary>
+    /// A Class that manages shares for other clients.
+    /// Holds a list of shares and functions to 
+    /// add/remove/search for them 
+    /// </summary>
     [Serializable ,TestFixture]
     public class Sharing: ICollection<Sharing.SharingEntry>
     {
+        /// <summary>
+        /// A Class to hold the information needed 
+        /// for a shared file
+        /// </summary>
         public class SharingEntry
         {
             protected long filesize = 0;
+            /// <summary>
+            /// Get/Set the file size of the entry
+            /// </summary>
             public long Filesize
             {
                 get
@@ -31,6 +43,9 @@ namespace DCPlusPlus
                     filesize = value;
                 }
             }
+            /// <summary>
+            /// Returns TRUE if the entry has a TTH hash
+            /// </summary>
             [XmlIgnoreAttribute]
             public bool HasTTH
             {
@@ -42,6 +57,9 @@ namespace DCPlusPlus
                 }
             }
             protected string tth = "";
+            /// <summary>
+            /// Get/Set the Base32 encoded TTH hash of the entry
+            /// </summary>
             public string TTH
             {
                 get
@@ -54,6 +72,9 @@ namespace DCPlusPlus
                 }
             }
             protected string filename = "";
+            /// <summary>
+            /// Get/Set the filename of the entry
+            /// </summary>
             public string Filename
             {
                 get
@@ -68,6 +89,10 @@ namespace DCPlusPlus
         }
         protected List<SharingEntry> items = new List<SharingEntry>();
         //[XmlArrayAttribute("Queue")]
+        /// <summary>
+        /// List of shares (will be an unpublic property soon,because of 
+        /// public locks that would be needed to use Items in a loop)
+        /// </summary>
         public List<SharingEntry> Items
         {
             get
@@ -80,6 +105,10 @@ namespace DCPlusPlus
             }
         }
         protected long total_bytes_shared = 0;
+        /// <summary>
+        /// Get the total number of bytes 
+        /// of all files shared
+        /// </summary>
         [XmlIgnoreAttribute]
         public long TotalBytesShared
         {
@@ -89,6 +118,9 @@ namespace DCPlusPlus
                 return (total_bytes_shared);
             }
         }
+        /// <summary>
+        /// Get the number of shared files
+        /// </summary>
         public int Count
         {
             get
@@ -96,30 +128,87 @@ namespace DCPlusPlus
                 return (items.Count);
             }
         }
+        /// <summary>
+        /// The lock object to make 
+        /// the sharing class thread safe
+        /// </summary>
         [XmlIgnoreAttribute]
         protected Object share_lock = new Object();
         /*public Object SharingLock
-        {
-            get
-            {
-                return (share_lock);
-            }
-            set
-            {
-                share_lock = value;
-            }
-        }*/
+{
+    get
+    {
+        return (share_lock);
+    }
+    set
+    {
+        share_lock = value;
+    }
+}*/
+        //it's a better idea to make locks not public ;-)
+
+        /// <summary>
+        /// Prototype for the Directory Finished Event Handler
+        /// </summary>
+        /// <param name="directory">The directory finished sharing</param>
         public delegate void DirectoryFinishedEventHandler(string directory);
+        /// <summary>
+        /// Event handler that gets called
+        /// when sharing/hashing a directory has finished
+        /// </summary>
         public event DirectoryFinishedEventHandler DirectoryFinished;
+        /// <summary>
+        /// Prototype for the Entry Added Event Handler
+        /// </summary>
+        /// <param name="entry">The entry that was added to the shares</param>
         public delegate void EntryAddedEventHandler(SharingEntry entry);
+        /// <summary>
+        /// Event handler that gets called
+        /// when an entry was added to the shares
+        /// </summary>
         public event EntryAddedEventHandler EntryAdded;
+        /// <summary>
+        /// Prototype for the Entry Removed Event Handler
+        /// </summary>
+        /// <param name="entry">The entry that was removed from the shares</param>
         public delegate void EntryRemovedEventHandler(SharingEntry entry);
+        /// <summary>
+        /// Event handler that gets called
+        /// when an entry was removed from the shares
+        /// </summary>
         public event EntryRemovedEventHandler EntryRemoved;
+        /// <summary>
+        /// Prototype for the Entries Changed Event Handler
+        /// </summary>
         public delegate void EntriesChangedEventHandler();
+        /// <summary>
+        /// Event handler that gets called
+        /// when one or more entries were changed
+        /// (deprecated , or possibly reused for its original purpose) 
+        /// </summary>
         public event EntriesChangedEventHandler EntriesChanged;
+        /// <summary>
+        /// Prototype for the Entries Cleared Event Handler
+        /// </summary>
         public delegate void EntriesClearedEventHandler();
+        /// <summary>
+        /// Event handler that gets called
+        /// when all shares were removed
+        /// </summary>
         public event EntriesClearedEventHandler EntriesCleared;
+        /// <summary>
+        /// Private Prototype for the Share File Async Handler
+        /// </summary>
+        /// <param name="filename">the filename of the file to be shared</param>
+        /// <returns>an entry of the file that was shared</returns>
         private delegate SharingEntry ShareFileHandler(string filename);
+        /// <summary>
+        /// Handler to share a file 
+        /// (will calculate its hash , so this may take a while or a lot longer ;-) )
+        /// TODO this will be renamed to ShareFile and vice versa for a more intuitive reading of the source code
+        /// </summary>
+        /// <param name="filename">the filename of the file to be shared</param>
+        /// <returns>an entry of the file that was shared</returns>
         private SharingEntry ShareFileAsync(string filename)
         {//share file
             if (!System.IO.File.Exists(filename)) return (null);
@@ -147,12 +236,29 @@ namespace DCPlusPlus
             }
             return (entry);
         }
+        /// <summary>
+        /// Private Prototype for the Share Directory Async Handler
+        /// (we return the path to ensure the correct parameter will be given
+        /// to the directory finished event handler [multiple sharing threads can
+        /// run at the same time ,so we need a way to differentiate them])
+        /// </summary>
+        /// <param name="directory">the path of the directory to be shared</param>
+        /// <returns>the directories path that was given as parameter</returns>
         private delegate string ShareDirectoryHandler(string directory);
+        /// <summary>
+        /// Handler to recursively share a directory tree
+        /// </summary>
+        /// <param name="directory">the path of the root directory to be shared</param>
+        /// <returns>the directories path that was given as parameter</returns>
         private string ShareDirectoryAsync(string directory)
         {//recurse into directories
             RecurseShareDirectoryAsync(directory);
             return (directory);
         }
+        /// <summary>
+        /// Recursively share a directory tree
+        /// </summary>
+        /// <param name="directory">the path of the root directory to be shared</param>
         private void RecurseShareDirectoryAsync(string directory)
         {
             if (!Directory.Exists(directory)) return;
@@ -178,6 +284,10 @@ namespace DCPlusPlus
                 }
             }
         }
+        /// <summary>
+        /// Callback for the share file Handler
+        /// </summary>
+        /// <param name="result">Async Result/State</param>
         private void ShareFileFinished(IAsyncResult result)
         {
             ShareFileHandler sfh = (ShareFileHandler)result.AsyncState;
@@ -189,6 +299,10 @@ namespace DCPlusPlus
             }
             file_list_needs_update = true;
         }
+        /// <summary>
+        /// Callback for the share directory Handler
+        /// </summary>
+        /// <param name="result">Async Result/State</param>
         private void ShareDirectoryFinished(IAsyncResult result)
         {
             ShareDirectoryHandler sdh = (ShareDirectoryHandler)result.AsyncState;
@@ -198,37 +312,45 @@ namespace DCPlusPlus
             file_list_needs_update = true;
         }
         // share files with these functions
+        /// <summary>
+        /// Asynchronously share a file
+        /// [Non blocking]
+        /// </summary>
+        /// <param name="filename">the filename of the file to be shared</param>
         public void ShareFile(string filename)
         {
             ShareFileHandler sfh = new ShareFileHandler(ShareFileAsync);
             IAsyncResult result = sfh.BeginInvoke(filename, new AsyncCallback(ShareFileFinished), sfh);
         }
+        /// <summary>
+        /// Asynchronously share a directory tree
+        /// [Non blocking]
+        /// </summary>
+        /// <param name="directory">the path of the root directory to be shared</param>
         public void ShareDirectory(string directory)
         {
             ShareDirectoryHandler sdh = new ShareDirectoryHandler(ShareDirectoryAsync);
             IAsyncResult result = sdh.BeginInvoke(directory, new AsyncCallback(ShareDirectoryFinished), sdh);
         }
+        /// <summary>
+        /// Tries to find a Share identified by its 
+        /// TTH or filename
+        /// to search for a TTH put a TTH/ in front the Base32 encoded TTH
+        /// </summary>
+        /// <param name="file_request">TTH or filename of share to be found</param>
+        /// <returns>an existing entry for the file request or NULL if none was found</returns>
         public SharingEntry GetShareByFileRequest(string file_request)
         {
             if(file_request.StartsWith("TTH/"))
                 return(GetShareByTTH(file_request.Substring(4)));
-            SharingEntry ret = null;
-            lock (share_lock)
-            {
-                foreach (SharingEntry entry in items)
-                {
-                    if (entry.Filename.EndsWith(file_request)) //maybe change this to a more sophisticated approach
-                    {
-                        //Console.WriteLine("Found entry by filename: "+filename);
-                        ret = entry;
-                        break;
-                    }
-                }
-            }
-            return (ret);
-
+            return (GetShareByFilename(file_request));
         }
         //TODO make these both functions async too (via handler in parameters)
+        /// <summary>
+        /// Tries to find a Share identified by its filename
+        /// </summary>
+        /// <param name="filename">the filename of the share to be found</param>
+        /// <returns>an existing entry or NULL if none was found</returns>
         public SharingEntry GetShareByFilename(string filename)
         {
             SharingEntry ret = null;
@@ -246,6 +368,11 @@ namespace DCPlusPlus
             }
             return (ret);
         }
+        /// <summary>
+        /// Tries to find a share identified by its tth
+        /// </summary>
+        /// <param name="tth">the tth of the share to be found</param>
+        /// <returns>an existing entry or NULL if none was found</returns>
         public SharingEntry GetShareByTTH(string tth)
         {
             SharingEntry ret = null;
@@ -262,6 +389,11 @@ namespace DCPlusPlus
             }
             return (ret);
         }
+        /// <summary>
+        /// Add an entry to the shares list
+        /// fires the added event
+        /// </summary>
+        /// <param name="item">the entry to be added</param>
         public void Add(SharingEntry item)
         {
             lock (share_lock)
@@ -281,6 +413,9 @@ namespace DCPlusPlus
             }
             file_list_needs_update = true;
         }
+        /// <summary>
+        /// Clears the shares list
+        /// </summary>
         public void Clear()
         {
             lock (share_lock)
@@ -301,6 +436,13 @@ namespace DCPlusPlus
             }
             file_list_needs_update = true;
         }
+        /// <summary>
+        /// Remove an entry from the shares list
+        /// fires the removed event if an entry 
+        /// was removed
+        /// </summary>
+        /// <param name="item">the entry to remove</param>
+        /// <returns>TRUE if an entry was removed</returns>
         public bool Remove(SharingEntry item)
         {
             total_bytes_shared -= item.Filesize;
@@ -309,6 +451,7 @@ namespace DCPlusPlus
             {
                 ret = items.Remove(item);
             }
+            if (ret == false) return (false); //only call event handler if an entry was actually removed
             try
             {
                 if (EntryRemoved != null)
@@ -323,7 +466,14 @@ namespace DCPlusPlus
             file_list_needs_update = true;
             return (ret);
         }
-        public void Remove(string filename)
+        /// <summary>
+        /// Remove an entry from the shares list
+        /// fires the removed event if an entry 
+        /// was removed
+        /// </summary>
+        /// <param name="filename">the filename of the entry to remove</param>
+        /// <returns>TRUE if an entry was removed</returns>
+        public bool Remove(string filename)
         {
             SharingEntry ret = null;
             lock (share_lock)
@@ -352,9 +502,15 @@ namespace DCPlusPlus
                 {
                     Console.WriteLine("Exception occured in remove event callback: " + ex.Message);
                 }
+                file_list_needs_update = true;
+                return (true);
             }
-            file_list_needs_update = true;
+            return (false);
         }
+        /// <summary>
+        /// Load shares from a xml string
+        /// </summary>
+        /// <param name="xml">a xml representation of a shares list</param>
         public void LoadSharesFromXml(string xml)
         {
             lock (share_lock)
@@ -398,6 +554,10 @@ namespace DCPlusPlus
             }
             file_list_needs_update = true;
         }
+        /// <summary>
+        /// Get shares list represented as a xml string
+        /// </summary>
+        /// <returns>the share list xml formatted</returns>
         public string SaveSharesToXml()
         {
             //nice way but seems to not work with list<> members
@@ -422,6 +582,10 @@ namespace DCPlusPlus
                 return (ret);
             }
         }
+        /// <summary>
+        /// Load shares from a xml file
+        /// </summary>
+        /// <param name="filename">the filename of the shares xml file</param>
         public void LoadSharesFromXmlFile(string filename)
         {
             try
@@ -434,6 +598,10 @@ namespace DCPlusPlus
                 Console.WriteLine("Error loading queue from: " + filename + " : " + ex.Message);
             }
         }
+        /// <summary>
+        /// Save shares to a xml file
+        /// </summary>
+        /// <param name="filename">the filename to write to</param>
         public void SaveSharesToXmlFile(string filename)
         {
             try
@@ -450,9 +618,23 @@ namespace DCPlusPlus
                 Console.WriteLine("Error saving queue to: " + filename + " : " + ex.Message);
             }
         }
+        /// <summary>
+        /// set to TRUE if at least one file was added/removed
+        /// to indicate that the file list needs to be 
+        /// reconstructed
+        /// </summary>
         private bool file_list_needs_update = true; //TODO only update lists on first request after a change (saves a lot of cpu)
+        /// <summary>
+        /// DC++ formatted file list of our shares list
+        /// </summary>
         private string file_list="";
+        /// <summary>
+        /// bz2 compressed file list
+        /// </summary>
         private byte[] file_list_bz2;
+        /// <summary>
+        /// Create the DC++ file list from our shares list
+        /// </summary>
         public void UpdateFileLists()
         {
             string xml = "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n";
@@ -488,6 +670,11 @@ namespace DCPlusPlus
             }
         }
         protected string cid = "D2QLOGUYDX3QA";
+        /// <summary>
+        /// ??CID??
+        /// i really need to look up what cid means
+        /// and does ;-)
+        /// </summary>
         public string CID
         {
             get
@@ -500,6 +687,9 @@ namespace DCPlusPlus
             }
         }
         protected string generator = "vpDcPlusPlus 0.2";
+        /// <summary>
+        /// Get/Set the file list generator name in the DC++ file list
+        /// </summary>
         public string Generator
         {
             get
@@ -511,12 +701,30 @@ namespace DCPlusPlus
                 generator = value;
             }
         }
+        /// <summary>
+        /// Helper class for the DC++ file list construction
+        /// </summary>
         public class DirectoryContents
         {
+            /// <summary>
+            /// the path of the directory
+            /// </summary>
             public string directory_name = "";
+            /// <summary>
+            /// a list of files in this directory
+            /// </summary>
             public List<SharingEntry> files = new List<SharingEntry>();
+            /// <summary>
+            /// a list of directories in this directory
+            /// </summary>
             public List<DirectoryContents> directories = new List<DirectoryContents>();
         }
+        /// <summary>
+        /// Convert a string to a valid xml string
+        /// (enquoting of invalid characters)
+        /// </summary>
+        /// <param name="org">some string to be converted to a xml string</param>
+        /// <returns>a quoted xml string</returns>
         private static string ToXmlString(string org)
         {
             if (String.IsNullOrEmpty(org)) return ("");
@@ -565,6 +773,12 @@ namespace DCPlusPlus
             //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
             return (tmp);
         }
+        /// <summary>
+        /// Convert a xml string back to a normal string
+        /// (unquoting of invalid characters)
+        /// </summary>
+        /// <param name="org">xml string</param>
+        /// <returns>an unquoted string</returns>
         private static string FromXmlString(string org)
         {
             if (org == null) return ("");
@@ -592,6 +806,12 @@ namespace DCPlusPlus
             //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
             return (tmp);
         }
+        /// <summary>
+        /// Find an existing directory in the directory contents tree
+        /// </summary>
+        /// <param name="dc">the starting point of search</param>
+        /// <param name="directory_name">the path of the directory to search for</param>
+        /// <returns>the directory sub tree found or NULL</returns>
         private DirectoryContents FindExistingDirectory(DirectoryContents dc,string directory_name)
         {
             foreach (DirectoryContents dir in dc.directories)
@@ -600,6 +820,10 @@ namespace DCPlusPlus
             }
             return (null);
         }
+        /// <summary>
+        /// Fill a directory contents tree from the shares list
+        /// </summary>
+        /// <param name="root"></param>
         private void FillDirectories(DirectoryContents root)
         {
             lock (share_lock)
@@ -630,6 +854,12 @@ namespace DCPlusPlus
                 }
             }
         }
+        /// <summary>
+        /// Cleans the directory tree from empty directories
+        /// (broken somehow)
+        /// </summary>
+        /// <param name="dc">the starting point from which to clean</param>
+        /// <returns>reserved for internal purposes</returns>
         private bool CleanDirectories(DirectoryContents dc)
         {//cleans directorycontents class of empty shares
             //check if this dir is empty and shall be removed
@@ -648,6 +878,11 @@ namespace DCPlusPlus
             }
             return (true);
         }
+        /// <summary>
+        /// Recursively gets all directory contents tree
+        /// </summary>
+        /// <param name="dc">the starting point of content gathering</param>
+        /// <returns>the directory contents</returns>
         private string GetDirectoryContentsString(DirectoryContents dc)
         {//recursively get all contents in one string
             string dir_string = "";
@@ -667,12 +902,20 @@ namespace DCPlusPlus
             }
             return (dir_string);
         }
+        /// <summary>
+        /// Get the DC++ file list 
+        /// </summary>
+        /// <returns>the uncompressed file list</returns>
         public string GetFileListXml()
         {
             if (file_list_needs_update)
                 UpdateFileLists();
             return (file_list);
         }
+        /// <summary>
+        /// Get the compressed DC++ file list
+        /// </summary>
+        /// <returns>the compressed file list</returns>
         public byte[] GetFileListXmlBZ2()
         {
             if (file_list_needs_update)
@@ -830,6 +1073,9 @@ namespace DCPlusPlus
         #endregion
 
 #region Unit Testing
+        /// <summary>
+        /// Test to see if sharing of a file works as expected
+        /// </summary>
         [Test]
         public void TestShareFile()
         {
@@ -861,6 +1107,9 @@ namespace DCPlusPlus
             }
             Console.WriteLine("Share File Test successful.");
         }
+        /// <summary>
+        /// Test to see if sharing of a directory works as expected
+        /// </summary>
         [Test]
         public void TestShareDirectory()
         {
@@ -902,6 +1151,9 @@ namespace DCPlusPlus
             Assert.IsTrue(s.items[2].Filesize == 10539254, "Filesize not correct(test2.mp3).");
             Console.WriteLine("Share Directory Test successful.");
         }
+        /// <summary>
+        /// Test to see if loading and saving of shares works as expected
+        /// </summary>
         [Test]
         public void TestShareSaveLoad()
         {
@@ -957,6 +1209,9 @@ namespace DCPlusPlus
             Assert.IsTrue(s.items[2].Filesize == 10539254, "Filesize not correct(test2.mp3).");
             Console.WriteLine("Save and Load Shares Test successful.");
         }
+        /// <summary>
+        /// Test to see if searching and removing of shares works as expected
+        /// </summary>
         [Test]
         public void TestShareSearchRemove()
         {
@@ -1010,6 +1265,9 @@ namespace DCPlusPlus
             Assert.IsTrue(found == null, "Removing Share failed(test2.mp3).");
             Console.WriteLine("Search and Remove Test successful.");
         }
+        /// <summary>
+        /// Test to see if hashing of files works as expected
+        /// </summary>
         [Test]
         public void TestTTHs()
         {
@@ -1053,6 +1311,10 @@ namespace DCPlusPlus
             Assert.IsTrue(s.items[2].Filesize == 10539254, "Filesize not correct(test2.mp3).");
             Console.WriteLine("TTHs Creation Test successful.");
         }
+        /// <summary>
+        /// Test to see if sharing of a non existing directory fails as expected
+        /// (to check for crashes of unexpected uncatched exceptions)
+        /// </summary>
         [Test]
         public void TestSharingNotExistingDirectory()
         {
@@ -1088,7 +1350,9 @@ namespace DCPlusPlus
             Assert.IsTrue(s.items.Count == 0, "Test failed : More than none files were shared.");
             Console.WriteLine("Sharing Empty Dir Test successful.");
         }
-
+        /// <summary>
+        /// Test to see if a valid  empty file list will be created
+        /// </summary>
         [Test]
         public void TestEmptyGetFileListXml()
         {
@@ -1126,7 +1390,9 @@ namespace DCPlusPlus
             Assert.IsTrue(file_list == "", "Empty FileList expected.");
             Console.WriteLine("Empty GetFilesList Creation Test successful.");
         }
-
+        /// <summary>
+        /// Test to see a valid file list will be created
+        /// </summary>
         [Test]
         public void TestGetFileListXml()
         {
@@ -1164,9 +1430,6 @@ namespace DCPlusPlus
             Assert.IsTrue(file_list == "", "Empty FileList expected.");
             Console.WriteLine("GetFilesList Creation Test successful.");
         }
-
-
 #endregion
-
     }
 }

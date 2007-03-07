@@ -11,16 +11,54 @@ using System.IO;
 
 namespace DCPlusPlus
 {
+    /// <summary>
+    /// A simple class to retrieve your own IP address
+    /// (if you are using a router it may be differing 
+    /// from the network cards address in your computer,
+    /// so we need a way to get the ip you are visible to 
+    /// other clients)
+    /// </summary>
     [TestFixture]
     public class ExternalIP
     {
+        /// <summary>
+        /// Event handler that gets called
+        /// when an ip address was retrieved 
+        /// after calling FetchIP()
+        /// </summary>
         public event CompletedEventHandler Completed;
+        /// <summary>
+        /// Event handler that gets called
+        /// when the progress of the FetchIP() operation
+        /// changed
+        /// </summary>
         public event ProgressChangedEventHandler ProgressChanged;
+        /// <summary>
+        /// Event handler that gets called
+        /// when the operation was unable to finish
+        /// the ip retrieval during an error
+        /// </summary>
         public event UnableToFetchEventHandler UnableToFetch;
+        /// <summary>
+        /// Prototype for the Completed Event Handler
+        /// </summary>
+        /// <param name="ex_ip">the External IP object that fired the event</param>
         public delegate void CompletedEventHandler(ExternalIP ex_ip);
+        /// <summary>
+        /// Prototype for the Progress Changed Event Handler
+        /// </summary>
+        /// <param name="ex_ip">the External IP object that fired the event</param>
         public delegate void ProgressChangedEventHandler(ExternalIP ex_ip);
+        /// <summary>
+        /// Prototype for the Unable To Fetch Event Handler
+        /// </summary>
+        /// <param name="ex_ip">the External IP object that fired the event</param>
         public delegate void UnableToFetchEventHandler(ExternalIP ex_ip);
         protected Connection.ErrorCodes error_code = Connection.ErrorCodes.NoErrorYet;
+        /// <summary>
+        /// Get the error code if something went wrong
+        /// and you want to tell the user the 'exact' cause
+        /// </summary>
         public Connection.ErrorCodes ErrorCode
         {
             get
@@ -29,6 +67,9 @@ namespace DCPlusPlus
             }
         }
         protected int percentage = 0;
+        /// <summary>
+        /// Get the progress percentage of the retrieval operation
+        /// </summary>
         public int Percentage
         {
             get
@@ -37,6 +78,9 @@ namespace DCPlusPlus
             }
         }
         protected string my_ip;
+        /// <summary>
+        /// Get the ip address FetchIP() retrieved
+        /// </summary>
         public string MyIP
         {
             get
@@ -50,6 +94,9 @@ namespace DCPlusPlus
 
         }
         protected bool busy = false;
+        /// <summary>
+        /// Get the Status of the retrieval
+        /// </summary>
         public bool IsBusy
         {
             get
@@ -57,6 +104,9 @@ namespace DCPlusPlus
                 return (busy);
             }
         }
+        /// <summary>
+        /// our weblclient instance we use to get the ip
+        /// </summary>
         private WebClient wc = new WebClient();
         public ExternalIP()
         {
@@ -65,7 +115,13 @@ namespace DCPlusPlus
             wc.DownloadDataCompleted += new DownloadDataCompletedEventHandler(DownloadFileCallback);
 
         }
+        /// <summary>
+        /// the url of the ip fetching service we use
+        /// </summary>
         private string url = "http://www.lawrencegoetz.com/programs/ipinfo/";
+        /// <summary>
+        /// Start an async retrieval of our external ip address
+        /// </summary>
         public void FetchIP()
         {
             if (!busy)
@@ -85,6 +141,9 @@ namespace DCPlusPlus
             }
 
         }
+        /// <summary>
+        /// Manually abort the retrieval
+        /// </summary>
         public void AbortFetch()
         {
             if (busy)
@@ -103,6 +162,12 @@ namespace DCPlusPlus
                 busy = false;
             }
         }
+        /// <summary>
+        /// Async callback for webclients get file operation
+        /// ,gets called if the file was retrieved successfully
+        /// </summary>
+        /// <param name="sender">event sending webclient instance</param>
+        /// <param name="e">event arguments of the download operation</param>
         private void DownloadFileCallback(object sender, DownloadDataCompletedEventArgs e)
         {
             try
@@ -159,6 +224,12 @@ namespace DCPlusPlus
 
             }
         }
+        /// <summary>
+        /// Async callback for webclients get file operation
+        /// ,gets called when the progress of the download changes
+        /// </summary>
+        /// <param name="sender">event sending webclient instance</param>
+        /// <param name="e">event arguments of the download operation</param>
         private void DownloadProgressCallback(object sender, DownloadProgressChangedEventArgs e)
         {
             percentage = e.ProgressPercentage;
@@ -166,6 +237,9 @@ namespace DCPlusPlus
                 ProgressChanged(this);
         }
 #region Unit Testing
+        /// <summary>
+        /// Test to check if we can successfully retrieve our ip address
+        /// </summary>
         [Test]
         public void TestResolve()
         {
@@ -196,6 +270,11 @@ namespace DCPlusPlus
             }
             Console.WriteLine("External IP resolve Test successful.");
         }
+        /// <summary>
+        /// Test to see if a failed resolve throws exceptions
+        /// we do not catch or our application may crash during
+        /// the retrieval
+        /// </summary>
         [Test]
         public void TestResolveFailServiceOffine()
         {

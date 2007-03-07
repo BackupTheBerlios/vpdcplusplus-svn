@@ -11,6 +11,12 @@ namespace DCPlusPlus
     [TestFixture]
     public class Peer : Connection
     {
+        //TODO 
+        //rewrite notes : download,upload,reuse connection,check of data during download
+        //                resume,download block in middle of the file (also after file_end and add zeros before)
+        //                simplify byte counters , tthl download , download to file or queue entry field
+        //                filelists
+
         public delegate void ConnectedEventHandler(Peer peer);
         public event ConnectedEventHandler Connected;
         public delegate void DisconnectedEventHandler(Peer peer);
@@ -44,6 +50,14 @@ namespace DCPlusPlus
             }
         }
         private int start_tick = 0;
+        protected long tthl_size = 0;
+        public long TTHLSize
+        {
+            get
+            {
+                return (tthl_size);
+            }
+        }
         private Stream stream = null;
         protected long bytes_already_downloaded = 0;
         public long BytesAlreadyDownloaded
@@ -257,20 +271,42 @@ namespace DCPlusPlus
             //TODO quite buggy divide by zero prob
             speed = (float)(((float)bytes_downloaded / 1024.0f) / ((float)(System.Environment.TickCount - start_tick) / 1000.0f));
             //Console.WriteLine("Received " + received_bytes + " bytes of data. with a speed of: " + (((System.Environment.TickCount - start_tick) / 1000) / (bytes_downloaded / 1024)) + " KB/s");
-            if (stream == null) //if we do not append we still have to create the output file
-                stream = new FileStream(queue_entry.OutputFilename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
+            if (stream == null)
+            {//if we do not append we still have to create the output file
+                if(queue_entry.WantTTHL)
+                    stream = new FileStream(queue_entry.OutputFilename+".tthl", FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
+                else
+                    stream = new FileStream(queue_entry.OutputFilename, FileMode.Create, FileAccess.Write, System.IO.FileShare.ReadWrite);
+            }
             stream.Write(receive_buffer, bytes_start, bytes_end);
             stream.Flush();
             if (DataReceived != null)
                 DataReceived(this);
-            if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
+            if (queue_entry.WantTTHL)
             {
-                if (Completed != null)
-                    Completed(this);
-                if (!CheckForExtension("ADCGet"))
-                    SendCommand("Send");
-                error_code = ErrorCodes.NoErrorYet;
-                Disconnect();
+                if (tthl_size > 0 && bytes_downloaded + bytes_already_downloaded == tthl_size)
+                {
+                    queue_entry.WantTTHL = false;
+                    queue_entry.UnclaimEntry();
+                    /*if (Completed != null)
+                        Completed(this);*/
+                    if (!CheckForExtension("ADCGet"))
+                        SendCommand("Send");
+                    error_code = ErrorCodes.NoErrorYet;
+                    Disconnect();
+                }
+            }
+            else
+            {
+                if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
+                {
+                    if (Completed != null)
+                        Completed(this);
+                    if (!CheckForExtension("ADCGet"))
+                        SendCommand("Send");
+                    error_code = ErrorCodes.NoErrorYet;
+                    Disconnect();
+                }
             }
 
         }
@@ -279,14 +315,16 @@ namespace DCPlusPlus
             try
             {
                 Socket receive_socket = (Socket)result.AsyncState;
+                //Console.WriteLine("Connection socket.");
                 if (!receive_socket.Connected)
                 {
+                    //Console.WriteLine("Connection connected.");
                     if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
                     {
                         if (Completed != null)
                             Completed(this);
-                        if (stream == null)
-                            stream.Close();
+                        error_code = ErrorCodes.Disconnected;
+                        Disconnect();
                         return;
                     }
                     if (first_bytes_received)//we need to unclaim our used entry too
@@ -296,6 +334,7 @@ namespace DCPlusPlus
                         Disconnected(this);*/
                     error_code = ErrorCodes.Disconnected;
                     Disconnect();
+                    return;
                 }
                 int received_bytes = receive_socket.EndReceive(result);
                 if (received_bytes > 0)
@@ -303,7 +342,6 @@ namespace DCPlusPlus
                     if (is_downloading)
                     {
                         WriteDataToFile(0, received_bytes);
-
                     }
                     else
                     {
@@ -313,7 +351,6 @@ namespace DCPlusPlus
                         int bytes_used = InterpretReceivedString(received_string);
                         if (bytes_used != -1 && bytes_used < received_bytes)
                         {//we already received some data from the file ... 
-
                             WriteDataToFile(bytes_used, received_bytes);
                         }
                     }
@@ -326,8 +363,8 @@ namespace DCPlusPlus
                     {
                         if (Completed != null)
                             Completed(this);
-                        if (stream == null)
-                            stream.Close();
+                        error_code = ErrorCodes.Disconnected;
+                        Disconnect();
                         return;
                     }
                     if (first_bytes_received) //we need to unclaim our used entry too
@@ -339,7 +376,7 @@ namespace DCPlusPlus
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Exception during receive of data: " + ex.Message);
+                //Console.WriteLine("Exception during receive of data: " + ex.Message);
                 if (queue_entry.Filesize > 0 && bytes_downloaded + bytes_already_downloaded == queue_entry.Filesize)
                 {
                     if (Completed != null)
@@ -569,11 +606,27 @@ namespace DCPlusPlus
             //this.source = source;
             direction = ConnectionDirection.Download;
             long start_pos = 0;
-            /*if (File.Exists(queue_entry.OutputFilename + ".tthl"))
+            if (File.Exists(queue_entry.OutputFilename + ".tthl"))
             {
                 File.Delete(queue_entry.OutputFilename + ".tthl");//delete old tthl file if happen to be there
             }
+
+            bytes_already_downloaded = 0;
+            /*if (File.Exists(queue_entry.OutputFilename))
+            {
+                FileInfo fi = new FileInfo(queue_entry.OutputFilename);
+                if (fi.Length >= queue_entry.Filesize)
+                {//abort , file is complete or something else may happened here
+                    Disconnect();
+                    return;
+                }
+                start_pos = fi.Length + 1;
+                bytes_already_downloaded = fi.Length;
+                stream = new FileStream(queue_entry.OutputFilename, FileMode.Append, FileAccess.Write, System.IO.FileShare.ReadWrite);
+            }
+            else start_pos = 1;
             */
+
             if (CheckForExtension("ADCGet") && CheckForExtension("TTHL") && CheckForExtension("TTHF") && queue_entry.HasTTH)
             {
                 SendCommand("ADCGET", "tthl TTH/" + queue_entry.TTH + " " + start_pos + " -1");
@@ -970,9 +1023,11 @@ namespace DCPlusPlus
                         {
                             long temp_upload_offset = long.Parse(parameters[2]);
                             long temp_upload_length = long.Parse(parameters[3]);
-                            if (queue_entry.Type == Queue.QueueEntry.EntryType.File && (temp_upload_length + temp_upload_offset) != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
+                            if (queue_entry.Type == Queue.QueueEntry.EntryType.File && !queue_entry.WantTTHL && (temp_upload_length + temp_upload_offset) != queue_entry.Filesize) Disconnect();//fail safe to secure downloads a bit 
                             if (queue_entry.Type == Queue.QueueEntry.EntryType.FileList)
                                 queue_entry.Filesize = temp_upload_offset + temp_upload_length;
+                            if (queue_entry.Type == Queue.QueueEntry.EntryType.File && queue_entry.WantTTHL)
+                                tthl_size = temp_upload_length;
                         }
                         catch (Exception ex) { Console.WriteLine("Error parsing file length: " + ex.Message); }
                         StartDownloadTransfer();
@@ -1186,6 +1241,8 @@ namespace DCPlusPlus
                     IPEndPoint endpoint = new IPEndPoint(IPAddress.Parse(ip), port);
                     AsyncCallback event_connect = new AsyncCallback(OnConnect);
                     socket.BeginConnect(endpoint, event_connect, socket);
+                    socket.ReceiveTimeout = 500;
+                    socket.SendTimeout = 500;
                 }
                 catch (Exception ex)
                 {
@@ -1220,7 +1277,7 @@ namespace DCPlusPlus
                 }
                 else
                 {
-                    Console.WriteLine("Unable to connect to peer");
+                    //Console.WriteLine("Unable to connect to peer");
                     error_code = ErrorCodes.UnableToConnect;
                     Disconnect();
                 }
@@ -1231,6 +1288,11 @@ namespace DCPlusPlus
                 error_code = ErrorCodes.UnableToConnect;
                 Disconnect();
             }
+        }
+        public void Ungrab()
+        {
+            //TODO remove all event handlers
+            
         }
     }
 }
