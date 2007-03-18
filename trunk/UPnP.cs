@@ -497,6 +497,314 @@ namespace DCPlusPlus
                     universal_unique_id = value;
                 }
             }
+
+            protected SubDevice root_device;
+            public SubDevice RootDevice
+            {
+                get
+                {
+                    return (root_device);
+                }
+            }
+            /// <summary>
+            /// TRUE if the basic device information has been gathered
+            /// (device information is needed to control it or get the status)
+            /// </summary>
+            public bool HasInformation
+            {
+                get
+                {
+                    return (false);
+                }
+            }
+            //protected string NotificationSubType NTS
+            //protected string NotificationType NT
+
+            //TODO move xml interpretation to upnp as static methods
+            //Problem how get values back into router class
+            //method shall return an router info class (info class base)
+            //which to use is based on a parameter (but this way the methods still need to 'know' about all possible info classes)
+            //at least some of them
+            private WebClient information_wc;
+            //private WebClient information_wc2;
+
+            public void GatherInformation()
+            {
+                //get location url
+                //interpret xml returned
+                //and set values accordingly
+                //find method urls of the router services
+                Console.WriteLine("Starting to gather device information.");
+
+
+                if (string.IsNullOrEmpty(location))
+                {
+                    if (InformationGathered != null)
+                        InformationGathered(this, false);
+                    return; //a location is really all we need here,but if its not there just return
+                }
+                if (!busy)
+                {
+                    information_wc = new WebClient();
+                    if (information_wc.IsBusy)
+                        Console.WriteLine("Damn the client is already busy.. wtf ?");
+                    //information_wc.Headers.Add("Connection","close");
+                    //information_wc.Headers.Add(HttpRequestHeader.KeepAlive, "close");
+                    information_wc.DownloadDataCompleted += delegate(object sender, DownloadDataCompletedEventArgs e)
+                    {
+                        Console.WriteLine("download completed");
+                        try
+                        {
+                            if (e.Cancelled)
+                            {
+                                if (InformationGathered != null)
+                                    InformationGathered(this, false);
+                                return;
+                            }
+                            if (e.Result.Length <= 0)
+                            {
+                                if (InformationGathered != null)
+                                    InformationGathered(this, false);
+                                return;
+                            }
+                            string page_string = "";
+                            page_string = System.Text.Encoding.Default.GetString(e.Result);
+                            information_wc.Dispose();
+                            //Console.WriteLine("xml_page_string:\n"+page_string);
+                            //we set the url base to the default value retrieved from location
+                            //in case the device wont send one
+                            Uri temp_location = new Uri(location);
+                            url_base = "http://"+temp_location.Host +":"+ temp_location.Port;
+                            GetDeviceDescription(page_string);
+                            /*
+                            //searching sub devices for a wan ip connections service
+                            if (root_device != null)
+                            {
+                                SubDevice.Service wan_ip_connection = root_device.GetServiceByType("urn:schemas-upnp-org:service:WANIPConnection:1");
+                                if (wan_ip_connection != null)
+                                {
+                                    Console.WriteLine("Found the wan ip connection service.");
+                                    Console.WriteLine("service control url: " + url_base + wan_ip_connection.ControlUrl);
+                                }
+                            }
+
+                            //download wanip description
+                            //GetWanIPDescription(page_string);
+                            */
+                            if (InformationGathered != null)
+                                InformationGathered(this, true);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Exception after download: " + ex.Message);
+                            if (InformationGathered != null)
+                                InformationGathered(this, false);
+                            return;
+                        }
+                    };
+                    busy = true;
+                    try
+                    {
+                        Console.WriteLine("starting download of: " + location);
+                        information_wc.DownloadDataAsync(new Uri(location));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Exception occured during download: " + ex.Message);
+                        busy = false;
+                        if (InformationGathered != null)
+                            InformationGathered(this, false);
+                    }
+                }
+            }
+            //TODO maybe urls can get screwed up sometimes the way it is now (base url / or no / )
+            private string GetFixedURL(string url)
+            {//checks if url needs some rebuilding
+                return (url);
+            }
+
+            private void GetDeviceDescription(string xml)
+            {
+                Console.WriteLine("getting device description");
+                XmlDocument doc = new XmlDocument();
+                try
+                {
+                    //Console.WriteLine("Starting to parse xml data.");
+                    doc.LoadXml(xml);
+                    XmlNodeList nodelist = doc.SelectNodes("/");
+                    foreach (XmlNode node in nodelist)
+                    {
+                        if (node.HasChildNodes)
+                        {
+                            foreach (XmlNode child in node.ChildNodes)
+                            {
+                                if (child.Name.Equals("root")) ReadDeviceDescriptionRoot(child);
+                            }
+                        }
+                    }
+                    //Console.WriteLine("Finished parsing.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("error reading xml device description: " + ex.Message);
+                }
+            }
+
+            private void ReadDeviceDescriptionRoot(XmlNode node)
+            {
+                /*
+                foreach (XmlAttribute attr in node.Attributes)
+                {
+                    //Console.WriteLine("attr:" + attr.Name + " - " + attr.Value);
+                    if (attr.Name.Equals("Name")) name = attr.Value;
+                    if (attr.Name.Equals("Address")) address = attr.Value;
+                }
+                */
+                if (node.HasChildNodes)
+                {
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        if (child.Name.Equals("specVersion")) ReadSpecVersion(child);
+                        if (child.Name.Equals("URLBase")) url_base = child.InnerText;
+                        if (child.Name.Equals("device"))
+                        {
+                            root_device = new SubDevice();
+                            ReadDevice(child, root_device);
+                        }
+                    }
+                }
+            }
+
+            private void ReadDevice(XmlNode node, SubDevice device)
+            {
+                if (node.HasChildNodes)
+                {
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        if (child.Name.Equals("deviceType")) device.DeviceType = child.InnerText;
+                        if (child.Name.Equals("presentationURL")) device.PresentationUrl = child.InnerText;
+                        if (child.Name.Equals("friendlyName")) device.FriendlyName = child.InnerText;
+                        if (child.Name.Equals("manufacturer")) device.Manufacturer = child.InnerText;
+                        if (child.Name.Equals("manufacturerURL")) device.ManufacturerUrl = child.InnerText;
+                        if (child.Name.Equals("modelDescription")) device.ModelDescription = child.InnerText;
+                        if (child.Name.Equals("modelName")) device.ModelName = child.InnerText;
+                        if (child.Name.Equals("UDN"))
+                        {
+                            device.UniversalUniqueID = child.InnerText;
+                            if (device.UniversalUniqueID.StartsWith("uuid:", true, null))
+                                device.UniversalUniqueID = device.UniversalUniqueID.Substring(5);
+                        }
+                        if (child.Name.Equals("serviceList")) ReadDeviceServiceList(child, device);
+                        if (child.Name.Equals("deviceList")) ReadDeviceDeviceList(child, device);
+                    }
+                }
+            }
+
+            private void ReadDeviceDeviceList(XmlNode node, SubDevice device)
+            {
+                if (node.HasChildNodes)
+                {
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        if (child.Name.Equals("device"))
+                        {
+                            SubDevice sub_device = new SubDevice();
+                            ReadDevice(child, sub_device);
+                            device.Devices.Add(sub_device);
+                        }
+                    }
+                }
+            }
+
+            private void ReadDeviceServiceList(XmlNode node, SubDevice device)
+            {
+                if (node.HasChildNodes)
+                {
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        if (child.Name.Equals("service")) ReadDeviceService(child, device);
+                    }
+                }
+            }
+
+            private void ReadDeviceService(XmlNode node, SubDevice device)
+            {
+                if (node.HasChildNodes)
+                {
+                    SubDevice.Service service = new SubDevice.Service();
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        if (child.Name.Equals("serviceType")) service.ServiceType = child.InnerText;
+                        if (child.Name.Equals("serviceId")) service.ServiceID = child.InnerText;
+                        if (child.Name.Equals("SCPDURL")) service.SCPDUrl = child.InnerText;
+                        if (child.Name.Equals("controlURL")) service.ControlUrl = child.InnerText;
+                        if (child.Name.Equals("eventSubURL")) service.EventSubUrl = child.InnerText;
+                    }
+                    device.Services.Add(service);
+                }
+            }
+
+            private void ReadSpecVersion(XmlNode node)
+            {
+                if (node.HasChildNodes)
+                {
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        try
+                        {
+                            if (child.Name.Equals("major")) spec_version_major = int.Parse(child.InnerText);
+                            if (child.Name.Equals("minor")) spec_version_minor = int.Parse(child.InnerText);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("error parsing spec version: " + ex.Message);
+                        }
+                    }
+                }
+            }
+
+            /*
+            private void GetWanIPDescription(string xml)
+            {
+
+            }
+            */
+            protected bool busy = false;
+            /// <summary>
+            /// Get the Status of the information gathering
+            /// </summary>
+            public bool IsBusy
+            {
+                get
+                {
+                    return (busy);
+                }
+            }
+            /// <summary>
+            /// Manually abort the gathering of router information
+            /// </summary>
+            public void AbortGathering()
+            {
+                if (busy)
+                {
+                    try
+                    {
+                        information_wc.CancelAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Exception occured during abort: " + ex.Message);
+                    }
+                    System.Threading.Thread.Sleep(10);
+                    //wc.IsBusy
+                    //wc = new WebClient();
+                    busy = false;
+                }
+            }
+
+            public delegate void InformationGatheredEventHandler(Device device, bool was_successful);
+            public event InformationGatheredEventHandler InformationGathered;
+
         }
         /// <summary>
         /// a class to represent an upnp device's subdevice
@@ -721,19 +1029,162 @@ namespace DCPlusPlus
 
         }
         /// <summary>
+        /// a class to use an upnp media renderer
+        /// </summary>
+        public class MediaRenderer : Device
+        {
+
+            public delegate void SettingPlaybackUrlCompletedEventHandler(MediaRenderer media_renderer, bool was_successful);
+            public event SettingPlaybackUrlCompletedEventHandler SettingPlaybackUrlCompleted;
+
+            public void SettingPlaybackUrl(string playback_url)
+            {
+                if (root_device != null)
+                {
+                    //searching sub devices for a av transport service
+                    SubDevice.Service transport = root_device.GetServiceByType("urn:schemas-upnp-org:service:AVTransport:1");
+                    if (transport != null)
+                    {
+                        Console.WriteLine("Found the av transport service.");
+                        Console.WriteLine("service control url: " + url_base + transport.ControlUrl);
+                        Console.WriteLine("service type: [" + transport.ServiceType + "]");
+                        string soap_method = "SetAVTransportURI";
+                        string soap_body = "<?xml version=\"1.0\"?>\r\n";
+                        soap_body += "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\r\n";
+                        soap_body += "<s:Body>\r\n";
+                        soap_body += "<m:" + soap_method + " xmlns:m=\"" + transport.ServiceType + "\">\r\n";
+                        soap_body += "<InstanceID>0</InstanceID>";
+                        soap_body += "<CurrentURI>" + playback_url + "</CurrentURI>";
+                        soap_body += "<CurrentURIMetaData></CurrentURIMetaData>";
+                        soap_body += "</m:" + soap_method + ">\r\n";
+                        soap_body += "</s:Body>\r\n";
+                        soap_body += "</s:Envelope>\r\n";
+                        string soap_action = transport.ServiceType + "#" + soap_method;
+                        SOAP soap = new SOAP(url_base + transport.ControlUrl, soap_body, soap_action);
+                        soap.RequestFinished += delegate(SOAP request_finished_soap, bool request_successful)
+                        {
+                            bool successful = false;
+                            if (request_successful)
+                            {
+                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                string[] seps = { "\r\n" };
+                                string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
+                                if (lines.Length > 0)
+                                {
+                                    if (lines[0] == "HTTP/1.1 200 OK")
+                                    {
+                                        if (request_finished_soap.Response.IndexOf(soap_method + "Response") != -1)
+                                        {
+                                            successful = true;
+                                        }
+                                    }
+                                }
+                            }
+                            else Console.WriteLine("Soap Request failed.");
+                            if (SettingPlaybackUrlCompleted != null)
+                                SettingPlaybackUrlCompleted(this, successful);
+                        };
+                        soap.StartRequest();
+
+                    }
+                }
+            }
+
+
+            public delegate void PressingButtonCompletedEventHandler(MediaRenderer media_renderer, Button pressed,bool was_successful);
+            public event PressingButtonCompletedEventHandler PressingButtonCompleted;
+
+            public enum Button
+            {
+                /// <summary>
+                /// 
+                /// </summary>
+                Play,
+                /// <summary>
+                /// 
+                /// </summary>
+                Stop,
+                /// <summary>
+                /// 
+                /// </summary>
+                Next,
+                /// <summary>
+                /// 
+                /// </summary>
+                Previous
+            }
+
+            public void Press(Button action)
+            {
+                if (root_device != null)
+                {
+                    //searching sub devices for a av transport service
+                    SubDevice.Service transport = root_device.GetServiceByType("urn:schemas-upnp-org:service:AVTransport:1");
+                    if (transport != null)
+                    {
+                        Console.WriteLine("Found the av transport service.");
+                        Console.WriteLine("service control url: " + url_base + transport.ControlUrl);
+                        Console.WriteLine("service type: [" + transport.ServiceType + "]");
+                        
+                        string soap_method = Enum.GetName(typeof(Button), action);
+                        string soap_body = "<?xml version=\"1.0\"?>\r\n";
+                        soap_body += "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\r\n";
+                        soap_body += "<s:Body>\r\n";
+                        soap_body += "<m:" + soap_method + " xmlns:m=\"" + transport.ServiceType + "\">\r\n";
+                        soap_body += "<InstanceID>0</InstanceID>";
+                        if(action== Button.Play)
+                            soap_body += "<Speed>1</Speed>";
+                        soap_body += "</m:" + soap_method + ">\r\n";
+                        soap_body += "</s:Body>\r\n";
+                        soap_body += "</s:Envelope>\r\n";
+                        string soap_action = transport.ServiceType + "#" + soap_method;
+                        SOAP soap = new SOAP(url_base + transport.ControlUrl, soap_body, soap_action);
+                        soap.RequestFinished += delegate(SOAP request_finished_soap, bool request_successful)
+                        {
+                            bool successful = false;
+                            if (request_successful)
+                            {
+                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                string[] seps = { "\r\n" };
+                                string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
+                                if (lines.Length > 0)
+                                {
+                                    if (lines[0] == "HTTP/1.1 200 OK")
+                                    {
+                                        if (request_finished_soap.Response.IndexOf(soap_method + "Response") != -1)
+                                        {
+                                            successful = true;
+                                        }
+                                    }
+                                }
+                            }
+                            else Console.WriteLine("Soap Request failed.");
+                            if (PressingButtonCompleted != null)
+                                PressingButtonCompleted(this,action, successful);
+                        };
+                        soap.StartRequest();
+
+                    }
+                }
+            }
+
+            public MediaRenderer(string usn,string location,string server,string uuid)
+            {
+                this.unique_service_name = usn;
+                this.location = location;
+                this.server = server;
+                this.universal_unique_id = uuid;
+                Uri temp = new Uri(location);
+                this.host = temp.Host;
+                this.port = temp.Port;
+            }
+        }
+
+        /// <summary>
      /// A class to use UPnP supporting Routers
      /// </summary>
         public class Router : Device
         {
-
-            protected SubDevice root_device;
-            public SubDevice RootDevice
-            {
-                get
-                {
-                    return (root_device);
-                }
-            }
 
             /*NOTIFY * HTTP/1.1
               HOST: 239.255.255.250:1900
@@ -754,17 +1205,6 @@ namespace DCPlusPlus
             /// TRUE if the router has updated status infos
             /// </summary>
             public bool HasStatusInfo
-            {
-                get
-                {
-                    return (false);
-                }
-            }
-            /// <summary>
-            /// TRUE if the basic router information has been gathered
-            /// (router information is needed to control it or get the status)
-            /// </summary>
-            public bool HasInformation
             {
                 get
                 {
@@ -797,280 +1237,7 @@ namespace DCPlusPlus
             }
 	
 	
-            //protected string NotificationSubType NTS
-            //protected string NotificationType NT
 
-            //TODO move xml interpretation to upnp as static methods
-            //Problem how get values back into router class
-            //method shall return an router info class (info class base)
-            //which to use is based on a parameter (but this way the methods still need to 'know' about all possible info classes)
-            //at least some of them
-            private WebClient information_wc;
-            //private WebClient information_wc2;
-
-            public void GatherInformation()
-            {
-                //get location url
-                //interpret xml returned
-                //and set values accordingly
-                //find method urls of the router services
-                Console.WriteLine("Starting to gather router information.");
-
-
-                if (string.IsNullOrEmpty(location))
-                {
-                    if (InformationGathered != null)
-                        InformationGathered(this, false);
-                    return; //a location is really all we need here,but if its not there just return
-                }
-                if (!busy)
-                {
-                    information_wc = new WebClient();
-                    if (information_wc.IsBusy)
-                        Console.WriteLine("Damn the client is already busy.. wtf ?");
-                    //information_wc.Headers.Add("Connection","close");
-                    //information_wc.Headers.Add(HttpRequestHeader.KeepAlive, "close");
-                    information_wc.DownloadDataCompleted += delegate(object sender, DownloadDataCompletedEventArgs e)
-                    {
-                        Console.WriteLine("download completed");
-                        try
-                        {
-                            if (e.Cancelled)
-                            {
-                                if (InformationGathered != null)
-                                    InformationGathered(this, false);
-                                return;
-                            }
-                            if (e.Result.Length <= 0)
-                            {
-                                if (InformationGathered != null)
-                                    InformationGathered(this, false);
-                                return;
-                            }
-                            string page_string = "";
-                            page_string = System.Text.Encoding.Default.GetString(e.Result);
-                            information_wc.Dispose();
-                            GetGatewayDescription(page_string);
-
-                            //searching sub devices for a wan ip connections service
-                            if (root_device != null)
-                            {
-                                SubDevice.Service wan_ip_connection = root_device.GetServiceByType("urn:schemas-upnp-org:service:WANIPConnection:1");
-                                if (wan_ip_connection != null)
-                                {
-                                    Console.WriteLine("Found the wan ip connection service.");
-                                    Console.WriteLine("service control url: " + url_base + wan_ip_connection.ControlUrl);
-                                }
-                            }
-
-                            //download wanip description
-                            //GetWanIPDescription(page_string);
-
-                            if (InformationGathered != null)
-                                InformationGathered(this, true);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("Exception after download: " + ex.Message);
-                            if (InformationGathered != null)
-                                InformationGathered(this, false);
-                            return;
-                        }
-                    };
-                    busy = true;
-                    try
-                    {
-                        Console.WriteLine("starting download of: "+location);
-                        information_wc.DownloadDataAsync(new Uri(location));
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Exception occured during download: " + ex.Message);
-                        busy = false;
-                        if (InformationGathered != null)
-                            InformationGathered(this, false);
-                    }
-                }
-            }
-
-            private void GetGatewayDescription(string xml)
-            {
-                Console.WriteLine("getting gateway description");
-                XmlDocument doc = new XmlDocument();
-                try
-                {
-                    //Console.WriteLine("Starting to parse xml data.");
-                    doc.LoadXml(xml);
-                    XmlNodeList nodelist = doc.SelectNodes("/");
-                    foreach (XmlNode node in nodelist)
-                    {
-                        if (node.HasChildNodes)
-                        {
-                            foreach (XmlNode child in node.ChildNodes)
-                            {
-                                if (child.Name.Equals("root")) ReadGatwayDescriptionRoot(child);
-                            }
-                        }
-                    }
-                    //Console.WriteLine("Finished parsing.");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("error reading xml device description: "+ex.Message);
-                }
-            }
-
-            private void ReadGatwayDescriptionRoot(XmlNode node)
-            {
-                /*
-                foreach (XmlAttribute attr in node.Attributes)
-                {
-                    //Console.WriteLine("attr:" + attr.Name + " - " + attr.Value);
-                    if (attr.Name.Equals("Name")) name = attr.Value;
-                    if (attr.Name.Equals("Address")) address = attr.Value;
-                }
-                */
-                if (node.HasChildNodes)
-                {
-                    foreach (XmlNode child in node.ChildNodes)
-                    {
-                        if (child.Name.Equals("specVersion")) ReadGatewaySpecVersion(child);
-                        if (child.Name.Equals("URLBase")) url_base = child.InnerText;
-                        if (child.Name.Equals("device"))
-                        {
-                            root_device = new SubDevice();
-                            ReadGatewayDevice(child, root_device);
-                        }
-                    }
-                }
-            }
-
-            private void ReadGatewayDevice(XmlNode node,SubDevice device)
-            {
-                if (node.HasChildNodes)
-                {
-                    foreach (XmlNode child in node.ChildNodes)
-                    {
-                        if (child.Name.Equals("deviceType")) device.DeviceType = child.InnerText;
-                        if (child.Name.Equals("presentationURL")) device.PresentationUrl = child.InnerText;
-                        if (child.Name.Equals("friendlyName")) device.FriendlyName = child.InnerText;
-                        if (child.Name.Equals("manufacturer")) device.Manufacturer = child.InnerText;
-                        if (child.Name.Equals("manufacturerURL")) device.ManufacturerUrl = child.InnerText;
-                        if (child.Name.Equals("modelDescription")) device.ModelDescription = child.InnerText;
-                        if (child.Name.Equals("modelName")) device.ModelName = child.InnerText;
-                        if (child.Name.Equals("UDN"))
-                        {
-                            device.UniversalUniqueID = child.InnerText;
-                            if (device.UniversalUniqueID.StartsWith("uuid:", true, null))
-                                device.UniversalUniqueID = device.UniversalUniqueID.Substring(5);
-                        }
-                        if (child.Name.Equals("serviceList")) ReadGatewayDeviceServiceList(child, device);
-                        if (child.Name.Equals("deviceList")) ReadGatewayDeviceDeviceList(child, device);
-                    }
-                }
-            }
-
-            private void ReadGatewayDeviceDeviceList(XmlNode node, SubDevice device)
-            {
-                if (node.HasChildNodes)
-                {
-                    foreach (XmlNode child in node.ChildNodes)
-                    {
-                        if (child.Name.Equals("device"))
-                        {
-                            SubDevice sub_device = new SubDevice();
-                            ReadGatewayDevice(child, sub_device);
-                            device.Devices.Add(sub_device);
-                        }
-                    }
-                }
-            }
-
-            private void ReadGatewayDeviceServiceList(XmlNode node, SubDevice device)
-            {
-                if (node.HasChildNodes)
-                {
-                    foreach (XmlNode child in node.ChildNodes)
-                    {
-                        if (child.Name.Equals("service")) ReadGatewayDeviceService(child, device);
-                    }
-                }
-            }
-
-            private void ReadGatewayDeviceService(XmlNode node, SubDevice device)
-            {
-                if (node.HasChildNodes)
-                {
-                    SubDevice.Service service = new SubDevice.Service();
-                    foreach (XmlNode child in node.ChildNodes)
-                    {
-                        if (child.Name.Equals("serviceType")) service.ServiceType = child.InnerText;
-                        if (child.Name.Equals("serviceId"))  service.ServiceID = child.InnerText;
-                        if (child.Name.Equals("SCPDURL"))  service.SCPDUrl = child.InnerText;
-                        if (child.Name.Equals("controlURL")) service.ControlUrl = child.InnerText;
-                        if (child.Name.Equals("eventSubURL")) service.EventSubUrl = child.InnerText;
-                    }
-                    device.Services.Add(service);
-                }
-            }
-
-            private void ReadGatewaySpecVersion(XmlNode node)
-            {
-                if (node.HasChildNodes)
-                {
-                    foreach (XmlNode child in node.ChildNodes)
-                    {
-                        try
-                        {
-                            if (child.Name.Equals("major")) spec_version_major = int.Parse(child.InnerText);
-                            if (child.Name.Equals("minor")) spec_version_minor = int.Parse(child.InnerText);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("error parsing spec version: " + ex.Message);
-                        }
-                    }
-                }
-            }
-
-            /*
-            private void GetWanIPDescription(string xml)
-            {
-
-            }
-            */
-            protected bool busy = false;
-            /// <summary>
-            /// Get the Status of the information gathering
-            /// </summary>
-            public bool IsBusy
-            {
-                get
-                {
-                    return (busy);
-                }
-            }
-            /// <summary>
-            /// Manually abort the gathering of router information
-            /// </summary>
-            public void AbortGathering()
-            {
-                if (busy)
-                {
-                    try
-                    {
-                        information_wc.CancelAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Exception occured during abort: " + ex.Message);
-                    }
-                    System.Threading.Thread.Sleep(10);
-                    //wc.IsBusy
-                    //wc = new WebClient();
-                    busy = false;
-                }
-            }
             /// <summary>
             /// Updates the status informations
             /// and fires a status updated event if the the status changed
@@ -1081,10 +1248,6 @@ namespace DCPlusPlus
                 //TODO add a subscribe event and delete this stub
 
             }
-
-            public delegate void InformationGatheredEventHandler(Router router, bool was_successful);
-            public event InformationGatheredEventHandler InformationGathered;
-
             public delegate void StatusUpdatedEventHandler(Router router, bool was_successful);
             public event StatusUpdatedEventHandler StatusUpdated;
 
@@ -1587,7 +1750,7 @@ namespace DCPlusPlus
                     }
                 }
             }
-            
+            //TODO maybe put this somehow into Device
             public Router(string usn,string location,string server,string uuid)
             {
                 this.unique_service_name = usn;
@@ -1600,6 +1763,10 @@ namespace DCPlusPlus
                 //scratched remark - give upnp class as parameter to use the upnp protocol functions
             }
         }
+        /// <summary>
+        /// Prototype for the Media Renderer Discovered Event Handler
+        /// </summary>
+        public event MediaRendererDiscoveredEventHandler MediaRendererDiscovered; 
 
         /// <summary>
         /// Prototype for the Router Discovered Event Handler
@@ -1609,6 +1776,12 @@ namespace DCPlusPlus
         /// Prototype for the Router State Changed Event Handler
         /// </summary>
         public event RouterStateChangedEventHandler RouterStateChanged;
+        /// <summary>
+        /// Event handler that gets called
+        /// when a UPnP Media Renderer was discovered in the lan
+        /// </summary>
+        /// <param name="router">the media renderer that was discovered</param>
+        public delegate void MediaRendererDiscoveredEventHandler(MediaRenderer media_renderer);
         /// <summary>
         /// Event handler that gets called
         /// when a UPnP Router was discovered in the lan
@@ -1928,12 +2101,13 @@ namespace DCPlusPlus
                 //message += ":" + ((IPEndPoint)receive_from_endpoint).Port.ToString();
             }
             message += ": ";
+             
+            Console.WriteLine("");
+            Console.WriteLine(message);
+            Console.WriteLine(received_string);
+            Console.WriteLine("");
+            Console.WriteLine("Header Lines:");
              */
-            //Console.WriteLine("");
-            //Console.WriteLine(message);
-            //Console.WriteLine(received_string);
-            //Console.WriteLine("");
-            //Console.WriteLine("Header Lines:");
             string[] seps = {"\r\n"};
             string[] lines = received_string.Split(seps, StringSplitOptions.RemoveEmptyEntries);
             string uuid = "";
@@ -2004,7 +2178,22 @@ namespace DCPlusPlus
                             RouterDiscovered(r);
                     }
                 }
-
+                else if (urn == "schemas-upnp-org:device:MediaRenderer:1")
+                {//we found a media renderer
+                    //check if its a new or to be updated entry
+                    Device existing = GetDeviceByUUID(uuid);
+                    if (existing != null)
+                    {//we need to update a router entry
+                        MediaRenderer updated = (MediaRenderer)existing;
+                    }
+                    else
+                    {//we discovered a new media renderer
+                        MediaRenderer mr = new MediaRenderer(usn, location, server, uuid);
+                        devices.Add(mr);
+                        if (MediaRendererDiscovered != null)
+                            MediaRendererDiscovered(mr);
+                    }
+                }
             }
 
             //Console.WriteLine("");
@@ -2030,12 +2219,362 @@ namespace DCPlusPlus
         #region Unit Testing
         /// <summary>
         /// Test to see if discovery works the way it should
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp device in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestDiscovery()
         {
-            Console.WriteLine("Test to discover upnp devices.");
+            Console.WriteLine("Test to discover supported upnp devices.");
+            UPnP u = new UPnP();
+            //u.SetupSockets();
+
+            bool wait = true;
+            int found = 0;
+            u.RouterDiscovered += delegate(Router r)
+            {
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a router --");
+                Console.WriteLine("Server: " + r.Server);
+                Console.WriteLine("Host: " + r.Host + ":" + r.Port);
+                Console.WriteLine("UUID: " + r.UniversalUniqueID);
+                Console.WriteLine("Location: " + r.Location);
+                Console.WriteLine("Unique Service Name: " + r.UniqueServiceName);
+                Console.WriteLine("-- Discovered a router --");
+                Console.WriteLine("");
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+                //wait = false;
+                found++;
+            };
+            u.MediaRendererDiscovered += delegate(MediaRenderer mr)
+            {
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a mediarenderer --");
+                Console.WriteLine("Server: " + mr.Server);
+                Console.WriteLine("Host: " + mr.Host + ":" + mr.Port);
+                Console.WriteLine("UUID: " + mr.UniversalUniqueID);
+                Console.WriteLine("Location: " + mr.Location);
+                Console.WriteLine("Unique Service Name: " + mr.UniqueServiceName);
+                Console.WriteLine("-- Discovered a mediarenderer --");
+                Console.WriteLine("");
+                found++;
+            };
+            u.StartDiscovery();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 15))
+                {
+                    if (found == 0)
+                    {
+                        Console.WriteLine("");
+                        Console.WriteLine("Operation took too long");
+                        Assert.Fail("Operation took too long");
+                    }
+                    wait = false;
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("");
+            if (found > 0) Console.WriteLine("Found " + found + " UPnP Devices.");
+            Assert.IsTrue(found>0,"Test failed: No devices found.");
+            Console.WriteLine("UPnP Device Discovery Test successful.");
+
+            u.CloseSockets();
+        }
+        /// <summary>
+        /// Test to see if gathering of device information works
+        /// (an upnp device in your lan is need to finish this test successfully)
+        /// </summary>
+        [Test]
+        public void TestInformationGathering()
+        {
+            Console.WriteLine("Test to gather information from a device.");
+            UPnP u = new UPnP();
+            //u.SetupSockets();
+
+            bool wait = true;
+            u.RouterDiscovered += delegate(Router r)
+            {
+                r.InformationGathered += delegate(Device dir, bool was_successful)
+                {
+                    Router ir = (Router)dir;
+                    if (was_successful)
+                    {
+                        Console.WriteLine("");
+                        Console.WriteLine("-- Gathered router information --");
+                        Console.WriteLine("SpecVersion: " + ir.SpecVersionMajor + "." + ir.SpecVersionMinor);
+                        Console.WriteLine("URLBase: " + ir.UrlBase);
+                        if (ir.RootDevice != null)
+                        {
+                            Console.WriteLine("presentationURL: " + ir.RootDevice.PresentationUrl);
+                            Console.WriteLine("friendlyName: " + ir.RootDevice.FriendlyName);
+                            Console.WriteLine("manufacturer: " + ir.RootDevice.Manufacturer);
+                            Console.WriteLine("manufacturerURL: " + ir.RootDevice.ManufacturerUrl);
+                            Console.WriteLine("modelDescription: " + ir.RootDevice.ModelDescription);
+                            Console.WriteLine("modelName: " + ir.RootDevice.ModelName);
+                            Console.WriteLine("Number of Sub Devices: " + ir.RootDevice.Devices.Count);
+                            Console.WriteLine("Sub UUID: " + ir.RootDevice.UniversalUniqueID);
+                        }
+                        //Console.WriteLine("Server: " + r.Server);
+                        Console.WriteLine("UUID: " + ir.UniversalUniqueID);
+                        Console.WriteLine("-- Gathered router information --");
+                        Console.WriteLine("");
+                        wait = false;
+                    }
+                    else Console.WriteLine("failed to gather router information");
+
+                };
+                r.GatherInformation();//TODO this could also be done by upnp after it fired the discovered event
+
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a router --");
+                Console.WriteLine("Server: " + r.Server);
+                Console.WriteLine("Host: " + r.Host + ":" + r.Port);
+                Console.WriteLine("UUID: " + r.UniversalUniqueID);
+                Console.WriteLine("Location: " + r.Location);
+                Console.WriteLine("Unique Service Name: " + r.UniqueServiceName);
+                Console.WriteLine("-- Discovered a router --");
+                Console.WriteLine("");
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+            };
+            u.StartDiscovery();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 60))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("UPnP Device Information Gathering Test successful.");
+
+            u.CloseSockets();
+        }
+        /// <summary>
+        /// Test to see if discovery of a media renderer works the way it should
+        /// (an upnp media renderer in your lan is need to finish this test successfully)
+        /// </summary>
+        [Test]
+        public void TestMediaRendererDiscovery()
+        {
+            Console.WriteLine("Test to discover an upnp media renderer.");
+            UPnP u = new UPnP();
+            //u.SetupSockets();
+
+            bool wait = true;
+            u.MediaRendererDiscovered += delegate(MediaRenderer mr)
+            {
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("Server: " + mr.Server);
+                Console.WriteLine("Host: " + mr.Host + ":" + mr.Port);
+                Console.WriteLine("UUID: " + mr.UniversalUniqueID);
+                Console.WriteLine("Location: " + mr.Location);
+                Console.WriteLine("Unique Service Name: " + mr.UniqueServiceName);
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("");
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+                wait = false;
+            };
+            u.StartDiscovery();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 60))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("UPnP Media Renderer Discovery Test successful.");
+
+            u.CloseSockets();
+        }
+        /// <summary>
+        /// Test to see if gathering of Media Renderer information works
+        /// (an upnp router in your lan is need to finish this test successfully)
+        /// </summary>
+        [Test]
+        public void TestMediaRendererInformationGathering()
+        {
+            Console.WriteLine("Test to gather information from a media renderer.");
+            UPnP u = new UPnP();
+            //u.SetupSockets();
+
+            bool wait = true;
+            u.MediaRendererDiscovered += delegate(MediaRenderer mr)
+            {
+                mr.InformationGathered += delegate(Device dimr, bool was_successful)
+                {
+                    MediaRenderer imr = (MediaRenderer)dimr;
+                    if (was_successful)
+                    {
+                        Console.WriteLine("");
+                        Console.WriteLine("-- Gathered media renderer information --");
+                        Console.WriteLine("SpecVersion: " + imr.SpecVersionMajor + "." + imr.SpecVersionMinor);
+                        Console.WriteLine("URLBase: " + imr.UrlBase);
+                        if (imr.RootDevice != null)
+                        {
+                            Console.WriteLine("presentationURL: " + imr.RootDevice.PresentationUrl);
+                            Console.WriteLine("friendlyName: " + imr.RootDevice.FriendlyName);
+                            Console.WriteLine("manufacturer: " + imr.RootDevice.Manufacturer);
+                            Console.WriteLine("manufacturerURL: " + imr.RootDevice.ManufacturerUrl);
+                            Console.WriteLine("modelDescription: " + imr.RootDevice.ModelDescription);
+                            Console.WriteLine("modelName: " + imr.RootDevice.ModelName);
+                            Console.WriteLine("Number of Sub Devices: " + imr.RootDevice.Devices.Count);
+                            Console.WriteLine("Sub UUID: " + imr.RootDevice.UniversalUniqueID);
+                        }
+                        //Console.WriteLine("Server: " + r.Server);
+                        Console.WriteLine("UUID: " + imr.UniversalUniqueID);
+                        Console.WriteLine("-- Gathered media renderer information --");
+                        Console.WriteLine("");
+                        wait = false;
+                    }
+                    else Console.WriteLine("failed to gather media renderer information");
+
+                };
+                mr.GatherInformation();//TODO this could also be done by upnp after it fired the discovered event
+
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("Server: " + mr.Server);
+                Console.WriteLine("Host: " + mr.Host + ":" + mr.Port);
+                Console.WriteLine("UUID: " + mr.UniversalUniqueID);
+                Console.WriteLine("Location: " + mr.Location);
+                Console.WriteLine("Unique Service Name: " + mr.UniqueServiceName);
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("");
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+            };
+            u.StartDiscovery();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 60))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("UPnP Media Renderer Information Gathering Test successful.");
+
+            u.CloseSockets();
+        }
+        /// <summary>
+        /// Test to see if setting a playback url of a media renderer connection works
+        /// (an upnp media renderer in your lan is need to finish this test successfully)
+        /// </summary>
+        [Test]
+        public void TestMediaRendererSetPlaybackUrl()
+        {
+            Console.WriteLine("Test to set a playback url of a media renderer.");
+            UPnP u = new UPnP();
+            //u.SetupSockets();
+
+            bool wait = true;
+            u.MediaRendererDiscovered += delegate(MediaRenderer mr)
+            {
+                mr.SettingPlaybackUrlCompleted += delegate(MediaRenderer sp, bool was_successful)
+                {
+                    if (was_successful)
+                        Console.WriteLine("Set a playback url.");
+                    //wait = !was_successful;
+                };
+                mr.PressingButtonCompleted += delegate(MediaRenderer sp,MediaRenderer.Button pressed, bool was_successful)
+                {
+                    if (was_successful)
+                        Console.WriteLine("Pressed the "+Enum.GetName(typeof(MediaRenderer.Button), pressed)+" button.");
+                    wait = !was_successful;
+                };
+
+                mr.InformationGathered += delegate(Device dimr, bool was_successful)
+                {
+                    MediaRenderer mir = (MediaRenderer)dimr;
+                    if (was_successful)
+                    {
+                        Console.WriteLine("");
+                        Console.WriteLine("-- Gathered media renderer information --");
+                        Console.WriteLine("SpecVersion: " + mir.SpecVersionMajor + "." + mir.SpecVersionMinor);
+                        Console.WriteLine("URLBase: " + mir.UrlBase);
+                        if (mir.RootDevice != null)
+                        {
+                            Console.WriteLine("presentationURL: " + mir.RootDevice.PresentationUrl);
+                            Console.WriteLine("friendlyName: " + mir.RootDevice.FriendlyName);
+                            Console.WriteLine("manufacturer: " + mir.RootDevice.Manufacturer);
+                            Console.WriteLine("manufacturerURL: " + mir.RootDevice.ManufacturerUrl);
+                            Console.WriteLine("modelDescription: " + mir.RootDevice.ModelDescription);
+                            Console.WriteLine("modelName: " + mir.RootDevice.ModelName);
+                            Console.WriteLine("Number of Sub Devices: " + mir.RootDevice.Devices.Count);
+                            Console.WriteLine("Sub UUID: " + mir.RootDevice.UniversalUniqueID);
+                            //Thread.Sleep(3000);
+                            mir.SettingPlaybackUrl("http://www.das-kollektiv.net/mp3_player/musik/das-kollektiv.net-keine_vision.mp3");
+                            mir.Press(MediaRenderer.Button.Play);
+                        }
+                        //Console.WriteLine("Server: " + r.Server);
+                        Console.WriteLine("UUID: " + mir.UniversalUniqueID);
+                        Console.WriteLine("-- Gathered media renderer information --");
+                        Console.WriteLine("");
+                    }
+                    else Console.WriteLine("failed to gather media renderer information");
+                };
+                mr.GatherInformation();//TODO this could also be done by upnp after it fired the discovered event
+
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("Server: " + mr.Server);
+                Console.WriteLine("Host: " + mr.Host + ":" + mr.Port);
+                Console.WriteLine("UUID: " + mr.UniversalUniqueID);
+                Console.WriteLine("Location: " + mr.Location);
+                Console.WriteLine("Unique Service Name: " + mr.UniqueServiceName);
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("");
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+            };
+            u.StartDiscovery();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 300))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("UPnP Media Renderer Set Playback URL Test successful.");
+
+            u.CloseSockets();
+        }
+        /// <summary>
+        /// Test to see if discovery of a router works the way it should
+        /// (an upnp router in your lan is need to finish this test successfully)
+        /// </summary>
+        [Test]
+        public void TestRouterDiscovery()
+        {
+            Console.WriteLine("Test to discover an upnp router.");
             UPnP u = new UPnP();
             //u.SetupSockets();
 
@@ -2069,13 +2608,13 @@ namespace DCPlusPlus
                 Console.Write(".");
                 Thread.Sleep(250);
             }
-            Console.WriteLine("UPnP Device Discovery Test successful.");
+            Console.WriteLine("UPnP Router Discovery Test successful.");
 
             u.CloseSockets();
         }
         /// <summary>
         /// Test to see if gathering of Router information works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterInformationGathering()
@@ -2087,8 +2626,9 @@ namespace DCPlusPlus
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
             {
-                r.InformationGathered += delegate(Router ir,bool was_successful)
+                r.InformationGathered += delegate(Device dir,bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if(was_successful)
                     {
                     Console.WriteLine("");
@@ -2149,7 +2689,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if Forced Termination of a Router connection works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterForceTermination()
@@ -2168,8 +2708,9 @@ namespace DCPlusPlus
                     wait = !was_successful;
                 };
 
-                r.InformationGathered += delegate(Router ir,bool was_successful)
+                r.InformationGathered += delegate(Device dir,bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
@@ -2230,7 +2771,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if requesting a Router to connect works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterRequestConnection()
@@ -2249,8 +2790,9 @@ namespace DCPlusPlus
                     wait = !was_successful;
                 };
 
-                r.InformationGathered += delegate(Router ir, bool was_successful)
+                r.InformationGathered += delegate(Device dir, bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
@@ -2311,7 +2853,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if fetching the external ip from a Router works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterFetchExternalIP()
@@ -2330,8 +2872,9 @@ namespace DCPlusPlus
                     wait = !was_successful;
                 };
 
-                r.InformationGathered += delegate(Router ir, bool was_successful)
+                r.InformationGathered += delegate(Device dir, bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
@@ -2392,7 +2935,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if Adding a Port mapping on a Router works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterAddPortMapping()
@@ -2426,8 +2969,9 @@ namespace DCPlusPlus
                         wait = !was_successful;
                 };
 
-                r.InformationGathered += delegate(Router ir, bool was_successful)
+                r.InformationGathered += delegate(Device dir, bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
@@ -2490,7 +3034,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if Deleting a Port mapping on a Router works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterDeletePortMapping()
@@ -2522,8 +3066,9 @@ namespace DCPlusPlus
                         wait = !was_successful;
                 };
 
-                r.InformationGathered += delegate(Router ir, bool was_successful)
+                r.InformationGathered += delegate(Device dir, bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
@@ -2586,7 +3131,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if checking if a Port mapping exists on a Router works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterCheckForExistingPortMapping()
@@ -2637,8 +3182,9 @@ namespace DCPlusPlus
                         wait = !was_successful;
                 };
 
-                r.InformationGathered += delegate(Router ir, bool was_successful)
+                r.InformationGathered += delegate(Device dir, bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
@@ -2701,7 +3247,7 @@ namespace DCPlusPlus
         }
         /// <summary>
         /// Test to see if status updating of Router information works
-        /// (a upnp router in your lan is need to finish this test successfully)
+        /// (an upnp router in your lan is need to finish this test successfully)
         /// </summary>
         [Test]
         public void TestRouterStatusUpdating()
@@ -2729,8 +3275,9 @@ namespace DCPlusPlus
 
                 };
 
-                r.InformationGathered += delegate(Router ir,bool was_successful)
+                r.InformationGathered += delegate(Device dir,bool was_successful)
                 {
+                    Router ir = (Router)dir;
                     if (was_successful)
                     {
                         Console.WriteLine("");
