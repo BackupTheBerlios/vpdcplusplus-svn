@@ -16,6 +16,7 @@ namespace DCPlusPlus
         //                resume,download block in middle of the file (also after file_end and add zeros before)
         //                simplify byte counters , tthl download , download to file or queue entry field
         //                filelists
+        // DataReceivedEventResolution in bytes after which a data received event is fired to reduce load on the gui
 
         public delegate void ConnectedEventHandler(Peer peer);
         public event ConnectedEventHandler Connected;

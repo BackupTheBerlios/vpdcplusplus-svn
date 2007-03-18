@@ -469,7 +469,7 @@ namespace DCPlusPlus
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("Error deleting file: "+ output_filename);
+                        Console.WriteLine("Error deleting file: "+ output_filename+" : "+ex.Message);
                     }
                 }
             }

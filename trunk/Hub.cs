@@ -1425,6 +1425,7 @@ namespace DCPlusPlus
                             string message = "";
                             if ((user_end_marker + 1) < received_strings[i].Length) 
                                 message = received_strings[i].Substring(user_end_marker+1);
+                            message = message.TrimStart(' ');
                             AddChatToHistory(user, message);
                         }
                         else Console.WriteLine("Received a wrong chat line: " + received_strings[i]);

@@ -4,6 +4,7 @@ using System.Text;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using NUnit.Framework;
 
 namespace DCPlusPlus
 {
@@ -13,6 +14,7 @@ namespace DCPlusPlus
     /// fires events upon a connected peer
     /// or a search result received via udp
     /// </summary>
+    [TestFixture]
     public class ListeningSockets
     {
         /// <summary>
@@ -146,7 +148,7 @@ namespace DCPlusPlus
         public ListeningSockets()
         {
             UpdateIP();
-            SetupListeningSocket();
+            //SetupListeningSocket();//TODO MAYBE REACTIVATE ... decide it pez !! ;-)
         }
         /// <summary>
         /// Updates the local ip address
@@ -304,7 +306,7 @@ namespace DCPlusPlus
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine("Exception opening local peer tcp port");
+                            Console.WriteLine("Exception opening local peer tcp port:"+ex.Message);
                         }
                     }
                     else Console.WriteLine("tcp port already in use :" + tcp_port);
@@ -325,7 +327,7 @@ namespace DCPlusPlus
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine("Exception opening local peer udp port");
+                            Console.WriteLine("Exception opening local peer udp port:"+ex.Message);
                         }
 
                     }
@@ -339,6 +341,7 @@ namespace DCPlusPlus
         /// <param name="result">Async Result/State</param>
         private void OnReceiveFrom(IAsyncResult result)
         {
+            if (!IsListening) return;
             if (udp_socket != null)
             {
                 if (!udp_socket.IsBound) return;
@@ -459,6 +462,7 @@ namespace DCPlusPlus
         /// <param name="result">Async Result/State</param>
         private void OnAccept(IAsyncResult result)
         {
+            if (!IsListening) return;
             if (tcp_socket != null)
             {
                 //if(
@@ -555,5 +559,63 @@ namespace DCPlusPlus
                 Console.WriteLine("exception during sending of SearchReply: " + ex.Message);
             }
         }
+        #region Unit Testing
+        /// <summary>
+        /// Test to see if opening and closing of sockets works
+        /// </summary>
+        [Test]
+        public void TestOpenClose()
+        {
+            Console.WriteLine("Test to open and close listening sockets.");
+            ListeningSockets ls = new ListeningSockets();
+            ls.SetupListeningSocket();
+            ls.CloseListeningSocket();
+            Console.WriteLine("Opening and Closing Sockets Test successful.");
+
+            /*bool wait = true;
+            u.RouterDiscovered += delegate(Router r)
+            {
+                wait = false;
+            };
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 300))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }*/
+        }
+        /// <summary>
+        /// Test to see if opening and NOT closing of sockets works
+        /// </summary>
+        [Test]
+        public void TestOpenWithoutClosing()
+        {
+            Console.WriteLine("Test to open and NOT close listening sockets.");
+            ListeningSockets ls = new ListeningSockets();
+            ls.SetupListeningSocket();
+            Console.WriteLine("Opening and NOT Closing Sockets Test successful.");
+        }
+        /// <summary>
+        /// Test to see if opening and NOT closing of sockets works using a defined port pair
+        /// </summary>
+        [Test]
+        public void TestOpenWithoutClosingAndPortsSpecified()
+        {
+            Console.WriteLine("Test to open and NOT close listening sockets(using specified ports).");
+            ListeningSockets ls = new ListeningSockets();
+            ls.UdpPort = 5000;
+            ls.TcpPort = 5000;
+            ls.SetupListeningSocket();
+            Console.WriteLine("Opening and NOT Closing Sockets Test successful.");
+        }
+        #endregion
     }
 }

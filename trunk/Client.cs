@@ -253,6 +253,88 @@ namespace DCPlusPlus
                 share_size = value;
             }
         }
+
+        //TODO add last search timestamp and time to wait period ended event
+        //add timer that starts on a search and fires CanSearchAgain event
+        protected int search_interval = 30;
+        public int SearchInterval
+        {
+            get
+            {
+                return (search_interval);
+            }
+            set
+            {
+                search_interval = value;
+            }
+        }
+        public bool HasSearchInterval
+        {
+            get
+            {
+                if (search_interval != 0)
+                    return (true);
+                return (false);
+            }
+
+        }
+        protected int source_interval = 30;
+        public int SourceInterval
+        {
+            get
+            {
+                return (source_interval);
+            }
+            set
+            {
+                source_interval = value;
+            }
+        }
+        public bool HasSourceInterval
+        {
+            get
+            {
+                if (source_interval != 0)
+                    return (true);
+                return (false);
+            }
+
+        }
+
+        private DateTime last_search_time_stamp; //TODO initialize to DateTime.Now - search_interval
+        private bool CanSearch()
+        {
+            return (true);
+        }
+
+        protected bool auto_find_alternates = false;
+        public bool AutoFindAlternates
+        {
+            get
+            {
+                return (auto_find_alternates);
+            }
+            set
+            {
+                auto_find_alternates = value;
+            }
+
+        }
+
+        protected bool auto_start_downloads = false;
+        public bool AutoStartDownloads
+        {
+            get
+            {
+                return (auto_start_downloads);
+            }
+            set
+            {
+                auto_start_downloads = value;
+            }
+        }
+
+
         /// <summary>
         /// Search for something on all hubs
         /// this will send a search request to every
