@@ -498,7 +498,7 @@ namespace DCPlusPlus
                 }
             }
 
-            protected SubDevice root_device;
+            protected SubDevice root_device=null;
             public SubDevice RootDevice
             {
                 get
@@ -514,7 +514,7 @@ namespace DCPlusPlus
             {
                 get
                 {
-                    return (false);
+                    return (!(root_device==null));
                 }
             }
             //protected string NotificationSubType NTS
@@ -1066,7 +1066,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1144,7 +1144,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1308,7 +1308,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1381,7 +1381,7 @@ namespace DCPlusPlus
                             bool exists = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1531,7 +1531,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1604,7 +1604,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1683,7 +1683,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps,StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1730,7 +1730,7 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
-                                Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
+                                //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps,StringSplitOptions.RemoveEmptyEntries);
                                 if (lines.Length > 0)
@@ -1805,7 +1805,7 @@ namespace DCPlusPlus
                 //string discovery_message = "M-SEARCH * HTTP/1.1\r\nST: upnp:rootdevice\r\nMX: 3\r\nMAN: \"ssdp:discover\"\r\nHOST: 239.255.255.250:1900\r\n\r\n\r\n";
                 string discovery_message = "M-SEARCH * HTTP/1.1\r\nST: ssdp:all\r\nMX: 3\r\nMAN: \"ssdp:discover\"\r\nHOST: 239.255.255.250:1900\r\n\r\n\r\n";
 
-                Console.WriteLine("Starting Discovery by sending : " + discovery_message);
+                //Console.WriteLine("Starting Discovery by sending : " + discovery_message);
                 IPEndPoint udp_discovery_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
                 byte[] send_bytes = System.Text.Encoding.Default.GetBytes(discovery_message);
                 udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_discovery_endpoint, new AsyncCallback(StartDiscoveryCallback), udp_send_socket);
@@ -1878,10 +1878,10 @@ namespace DCPlusPlus
             if (host_entry.AddressList.Length == 0) return;//computer has not one network interface ;-( i bet this one will never a case anywhere, but better catch it *g*
             ip = host_entry.AddressList[0].ToString();
 
-            SetupSockets();
+            //SetupSockets();
         }
         
-        private void SetupSockets()
+        public void SetupSockets()
         {
             lock (listening_lock)
             {
@@ -1942,7 +1942,7 @@ namespace DCPlusPlus
                 else Console.WriteLine("udp socket already listening");
             }
         }
-        private void CloseSockets()
+        public void CloseSockets()
         {
             lock (listening_lock)
             {
@@ -2108,6 +2108,7 @@ namespace DCPlusPlus
             Console.WriteLine("");
             Console.WriteLine("Header Lines:");
              */
+            //Console.WriteLine(received_string);
             string[] seps = {"\r\n"};
             string[] lines = received_string.Split(seps, StringSplitOptions.RemoveEmptyEntries);
             string uuid = "";
@@ -2226,7 +2227,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to discover supported upnp devices.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             int found = 0;
@@ -2292,7 +2293,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to gather information from a device.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -2367,7 +2368,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to discover an upnp media renderer.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.MediaRendererDiscovered += delegate(MediaRenderer mr)
@@ -2412,7 +2413,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to gather information from a media renderer.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.MediaRendererDiscovered += delegate(MediaRenderer mr)
@@ -2487,7 +2488,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to set a playback url of a media renderer.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.MediaRendererDiscovered += delegate(MediaRenderer mr)
@@ -2525,7 +2526,8 @@ namespace DCPlusPlus
                             Console.WriteLine("Number of Sub Devices: " + mir.RootDevice.Devices.Count);
                             Console.WriteLine("Sub UUID: " + mir.RootDevice.UniversalUniqueID);
                             //Thread.Sleep(3000);
-                            mir.SettingPlaybackUrl("http://www.das-kollektiv.net/mp3_player/musik/das-kollektiv.net-keine_vision.mp3");
+                            mir.SettingPlaybackUrl("http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3");
+                            Thread.Sleep(1000);
                             mir.Press(MediaRenderer.Button.Play);
                         }
                         //Console.WriteLine("Server: " + r.Server);
@@ -2576,7 +2578,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to discover an upnp router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -2621,7 +2623,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to gather information from a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -2696,7 +2698,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to disconnect a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -2778,7 +2780,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to connect a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -2860,7 +2862,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to fetch the external ip from a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -2942,7 +2944,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to add a portmapping on a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
             Console.WriteLine("our internal ip: "+ip);
             bool wait = true;
             bool test_failed = false;
@@ -3041,7 +3043,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to delete a portmapping on a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             bool test_failed = false;
@@ -3138,7 +3140,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to check a portmapping on a router for its existance.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             bool test_failed = false;
@@ -3254,7 +3256,7 @@ namespace DCPlusPlus
         {
             Console.WriteLine("Test to update status from a router.");
             UPnP u = new UPnP();
-            //u.SetupSockets();
+            u.SetupSockets();
 
             bool wait = true;
             u.RouterDiscovered += delegate(Router r)
@@ -3323,6 +3325,129 @@ namespace DCPlusPlus
 
             u.CloseSockets();
         }
+
+        /// <summary>
+        /// Test to see if setting a playback url of a media renderer connection works
+        /// in conjunction with a mini web server
+        /// (an upnp media renderer in your lan is need to finish this test successfully)
+        /// </summary>
+        [Test]
+        public void TestMediaRendererSetPlaybackUrlWithMiniWebServer()
+        {
+            Console.WriteLine("Test to set a playback url of a media renderer with a mini web server.");
+            UPnP u = new UPnP();
+            u.SetupSockets();
+            MiniWebServer server = new MiniWebServer();
+            server.Port = 80;
+            server.SetupListeningSocket();
+
+            bool wait = true;
+            server.RequestReceived += delegate(MiniWebServer request_server, MiniWebServer.Request request)
+            {
+                Console.WriteLine("Request received: ");
+                Console.WriteLine("URL: " + request.Url);
+                Console.WriteLine("Method: " + request.Method);
+                Console.WriteLine("Version: " + request.Version);
+                Console.WriteLine("Headers:");
+                foreach (string key in request.Headers.Keys)
+                {
+                    Console.WriteLine("[" + key + "]" + ":[" + request.Headers.Get(key) + "]");
+                }
+                if (request.Url == "/")
+                {
+                    string page = "";
+                    //string type = "text/plain";
+                    page = "<html>\n<head>\n<title>MiniWebServer Test Page</title>\n</head>\n<body bgcolor=\"#333355\">Test Page of the Miniwebserver running on port: " + server.Port + "<br><a href=\"/test.mp3\">Test Mp3</a></body>\n</html>\n";
+                    string type = "text/html";
+                    request.RequestClient.Answer(page, type);
+                }
+                else if (request.Url == "/test.mp3")
+                {
+                    byte[] mp3 = File.ReadAllBytes("..\\..\\..\\TestDateien\\test.mp3");
+                    string type = "audio/mpeg";
+                    request.RequestClient.Answer(mp3, type);
+                }
+            };
+
+            u.MediaRendererDiscovered += delegate(MediaRenderer mr)
+            {
+                mr.SettingPlaybackUrlCompleted += delegate(MediaRenderer sp, bool was_successful)
+                {
+                    if (was_successful)
+                        Console.WriteLine("Set a playback url.");
+                    //wait = !was_successful;
+                };
+                mr.PressingButtonCompleted += delegate(MediaRenderer sp, MediaRenderer.Button pressed, bool was_successful)
+                {
+                    if (was_successful)
+                        Console.WriteLine("Pressed the " + Enum.GetName(typeof(MediaRenderer.Button), pressed) + " button.");
+                    wait = !was_successful;
+                };
+
+                mr.InformationGathered += delegate(Device dimr, bool was_successful)
+                {
+                    MediaRenderer mir = (MediaRenderer)dimr;
+                    if (was_successful)
+                    {
+                        Console.WriteLine("");
+                        Console.WriteLine("-- Gathered media renderer information --");
+                        Console.WriteLine("SpecVersion: " + mir.SpecVersionMajor + "." + mir.SpecVersionMinor);
+                        Console.WriteLine("URLBase: " + mir.UrlBase);
+                        if (mir.RootDevice != null)
+                        {
+                            Console.WriteLine("presentationURL: " + mir.RootDevice.PresentationUrl);
+                            Console.WriteLine("friendlyName: " + mir.RootDevice.FriendlyName);
+                            Console.WriteLine("manufacturer: " + mir.RootDevice.Manufacturer);
+                            Console.WriteLine("manufacturerURL: " + mir.RootDevice.ManufacturerUrl);
+                            Console.WriteLine("modelDescription: " + mir.RootDevice.ModelDescription);
+                            Console.WriteLine("modelName: " + mir.RootDevice.ModelName);
+                            Console.WriteLine("Number of Sub Devices: " + mir.RootDevice.Devices.Count);
+                            Console.WriteLine("Sub UUID: " + mir.RootDevice.UniversalUniqueID);
+                            //Thread.Sleep(3000);
+                            mir.SettingPlaybackUrl("http://"+ip+"/test.mp3");
+                            Thread.Sleep(1000);
+                            mir.Press(MediaRenderer.Button.Play);
+                        }
+                        //Console.WriteLine("Server: " + r.Server);
+                        Console.WriteLine("UUID: " + mir.UniversalUniqueID);
+                        Console.WriteLine("-- Gathered media renderer information --");
+                        Console.WriteLine("");
+                    }
+                    else Console.WriteLine("failed to gather media renderer information");
+                };
+                mr.GatherInformation();//TODO this could also be done by upnp after it fired the discovered event
+
+                Console.WriteLine("");
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("Server: " + mr.Server);
+                Console.WriteLine("Host: " + mr.Host + ":" + mr.Port);
+                Console.WriteLine("UUID: " + mr.UniversalUniqueID);
+                Console.WriteLine("Location: " + mr.Location);
+                Console.WriteLine("Unique Service Name: " + mr.UniqueServiceName);
+                Console.WriteLine("-- Discovered a media renderer --");
+                Console.WriteLine("");
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+            };
+            u.StartDiscovery();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 300))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("UPnP Media Renderer Set Playback URL With Mini Web Server Test successful.");
+
+            u.CloseSockets();
+        }
+
         #endregion
     }
 }
