@@ -482,18 +482,11 @@ namespace DCPlusPlus
                     if (!client.Connected) return;
                     //Console.WriteLine("new client connected.");
                     Peer new_peer = new Peer(client);
-                    try
+                    if (PeerConnected != null)
                     {
-                        if (PeerConnected != null)
-                        {
-                            PeerConnected(new_peer);
-                        }
+                        PeerConnected(new_peer);
+                    }
                     
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Exception in Peer Connected Event: " + ex.Message);
-                    }
                             
                     //accept_socket.Close();
                 }

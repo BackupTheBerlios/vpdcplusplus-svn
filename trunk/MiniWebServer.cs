@@ -8,6 +8,10 @@ using System.Net;
 using System.IO;
 
 
+//TODO
+// add resume support
+// fix waiting bug if some other request takes too much time to process
+
 namespace DCPlusPlus
 {
     /// <summary>
@@ -16,6 +20,52 @@ namespace DCPlusPlus
     [TestFixture]
     public class MiniWebServer
     {
+
+        static private string http_version="HTTP/1.0";
+
+        static public string HttpVersion
+        {
+            get { return http_version; }
+            set { http_version = value; }
+        }
+
+        static private string mime_types_file = ".\\web\\mime.types";
+
+        static public string MimeTypesFile
+        {
+            get { return mime_types_file; }
+            set { mime_types_file = value; }
+        }
+        /// <summary>
+        /// Get the Mime-Type for a file extension
+        /// </summary>
+        /// <param name="filename">the filename or the extension (starting with a .)</param>
+        /// <returns>the best matching mime type found</returns>
+        static public string GetMimeType(string filename)
+        {
+            try
+            {
+                string extension = Path.GetExtension(filename);
+                string[] mime_types = File.ReadAllLines(mime_types_file);
+                foreach (string mime_type in mime_types)
+                {
+                    string[] seps = { " " };
+                    string[] fields = mime_type.Split(seps, StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length == 2)
+                    {
+                        if (fields[0] == extension)
+                            return (fields[1]);
+                    }
+
+                }
+                return ("application/octet-stream");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Unable to get mime type: " + ex.Message);
+                return ("application/octet-stream");
+            }
+        }
         /// <summary>
         /// a class to interact with a connecected web client
         /// </summary>
@@ -24,7 +74,7 @@ namespace DCPlusPlus
             private Socket socket = null;
             private byte[] receive_buffer = new byte[8192];
             private bool disconnected = false;
-            private object disconnected_lock = new object();
+            //private object disconnected_lock = new object();
             public void StartReceiving()
             {
                 try
@@ -49,32 +99,71 @@ namespace DCPlusPlus
 
             }
 
-            private string request_string = "";
+            public void ResetRequest()
+            {
+                header_finished = false;
+                header_string = "";
+                request_string = "";
+                body_string = "";
+                send_bytes_length = 0;
+
+                file_real_filesize = -1;
+                file_answer_transfered_bytes = 0;
+                if(file_answer_stream != null)
+                    file_answer_stream.Close();
+            }
+
+            private bool header_finished=false;
+
+            public bool HeaderFinished
+            {
+                get { return header_finished; }
+                set { header_finished = value; }
+            }
+
+            
+            private string request_string;
 
             public string RequestString
             {
                 get { return request_string; }
                 set { request_string = value; }
             }
+	
+            private string header_string = "";
+
+            public string HeaderString
+            {
+                get { return header_string; }
+                set { header_string = value; }
+            }
+
+            private string body_string = "";
+
+            public string BodyString
+            {
+                get { return body_string; }
+                set { body_string = value; }
+            }
 
             public void Disconnect()
             {
-                lock (disconnected_lock)
-                {
+                //lock (disconnected_lock)
+                //{
                     disconnected = true;
-                    socket.ReceiveTimeout = 0;
+                    //socket.ReceiveTimeout = 0;
                     socket.Close();
                     socket = null;
-                }
+                //}
             }
 
             
             private void OnReceive(IAsyncResult result)
             {
-                lock (disconnected_lock)
-                {
+                //lock (disconnected_lock)
+                //{
                     if (disconnected) return;
-                }
+                //}
 
                 try
                 {
@@ -90,16 +179,61 @@ namespace DCPlusPlus
                             string received_string = System.Text.Encoding.Default.GetString(receive_buffer, 0, received_bytes);
                             //Console.WriteLine("Received this from a client: " + received_string);
                             request_string +=received_string;
-                            if (received_string.IndexOf("\r\n\r\n")!=-1)
+                            int header_end = request_string.IndexOf("\r\n\r\n");
+                            if (header_end!=-1)
                             {//header finished TODO add timeout and a better detection for a complete header 
-
-                                Request request = new Request(request_string,this);
-                                if (request.IsValid)
+                                //now try to get body string if content-length + method = POST
+                                //maybe wait for rest of body
+                                header_finished = true;
+                                header_string = request_string.Substring(0, header_end);
+                                if (header_string.StartsWith("POST"))
                                 {
-                                    if (RequestReceived != null)
-                                        RequestReceived(this, request);
+                                    string[] seps = { "\r\n" };
+                                    string[] lines = header_string.Split(seps, StringSplitOptions.None);
+                                    int content_length = 0;
+                                    foreach(string line in lines)
+                                    { 
+                                        if(line.StartsWith("Content-Length:",true,null))
+                                        {
+                                            try
+                                            {
+                                                content_length = int.Parse(line.Substring("Content-Length:".Length).Trim());
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Console.WriteLine("error parsing content-length: "+ex.Message);
+                                            }
+                                        }
+                                    }
+                                    
+                                    //check if body_string.Length == content-length if given else just parse the request
+                                    //if != wait for more data
+                                    if (content_length != 0)
+                                    {
+                                        if (request_string.Substring(header_end + "\r\n\r\n".Length).Length >= content_length)
+                                        {
+                                            body_string = request_string.Substring(header_end + "\r\n\r\n".Length,content_length);
+                                        }
+                                        else header_finished = false;
+                                    }
+                                    else
+                                    { //this needs to be more robust for a perfect environment to handle even oldest clients
+                                        //maybe with some kind of timeout to ensure all body data was received
+                                        body_string = request_string.Substring(header_end + "\r\n\r\n".Length);
+                                    }
                                 }
-                                else Console.WriteLine("Received an invalid request.");
+
+                                if (header_finished)
+                                {
+                                    Request request = new Request(header_string, body_string, this);
+                                    if (request.IsValid)
+                                    {
+                                        Console.WriteLine("a valid request was received.");
+                                        if (RequestReceived != null)
+                                            RequestReceived(this, request);
+                                    }
+                                    else Console.WriteLine("Received an invalid request.");
+                                }
                             }
                             AsyncCallback event_receive = new AsyncCallback(OnReceive);
                             receive_socket.BeginReceive(receive_buffer, 0, receive_buffer.Length, SocketFlags.None, event_receive, receive_socket);
@@ -117,32 +251,160 @@ namespace DCPlusPlus
                 }
             }
 
-            public void TellNotFound()
+
+            private string auth_realm="vpDCPlusPlus";
+
+            public string AuthRealm
             {
-                /*HTTP/1.1 200 OK
-                SERVER: Ambit OS/1.0 UPnP/1.0 AMBIT-UPNP/1.0
-                EXT:
-                LOCATION: http://192.168.0.1:80/Public_UPNP_gatedesc.xml
-                CACHE-CONTROL: max-age=3600
-                ST: upnp:rootdevice
-                USN: uuid:c5d399f6-750e-a039-334c-7af0d49396f3::upnp:rootdevice
-                */
-                Answer("HTTP/1.1 404 Not Found\r\nConnection: Close\r\n\r\n");
+                get { return auth_realm; }
+                set { auth_realm = value; }
+            }
+	
+
+            public void TellToAuthenticate()
+            {
+                request_string = "";
+                string body = "<html><head><title>401 Not allowed</title></head><body><h1>401 Not allowed</h1><p>The access to this resource has been denied; The client didn't authenticate.</p></body></html>";
+                string header = MiniWebServer.HttpVersion + " 401 Nicht zugelassen\r\nConnection: Close\r\nWWW-Authenticate: Basic realm=\"" + auth_realm + "\"\r\nContent-type: text/html\r\nContent-Length: " + body.Length + "\r\n\r\n";
+                Answer(header+body);
             }
 
-            public void Answer(byte[] content, string type)
+            public void TellNotFound()
+            {
+                request_string = "";
+                string body = "<html><head><title>404 File not found</title></head><body><h1>404 File not found</h1><p>The resource was not found on this server; The client has specified an invalid resource.</p></body></html>";
+                string header = MiniWebServer.HttpVersion + " 404 Not Found\r\nConnection: Close\r\nContent-type: text/html\r\nContent-Length: " + body.Length + "\r\n\r\n";
+                Answer(header + body);
+                    
+            }
+
+            public void TellNewLocation(string url)
+            {
+                request_string = "";
+                string body = "<html><head><title>302 Moved Temporarily</title></head><body><h1>302 Moved Temporarily</h1><p>The resource has been moved temporarily;If the client doesn't load the resource in a few seconds ,you may find it <a href=\""+url+"\">here</a>.</p></body></html>";
+                string header = MiniWebServer.HttpVersion + " 302 Moved Temporarily\r\nLocation: " + url + "\r\nConnection: Close\r\nContent-type: text/html\r\nContent-Length: "+body.Length+"\r\n\r\n";
+                Answer(header + body);
+            }
+
+
+            private int send_bytes_length = 0;
+
+            private int file_answer_timeout = 25; 
+            private int file_answer_buffer_size=2048;
+            private FileStream file_answer_stream = null;
+            private long file_real_filesize = -1;
+            private long file_answer_transfered_bytes = 0;
+            private int file_answer_header_length = 0;
+
+            public void FileAnswer(string filename)
+            {
+                FileAnswer(filename,-1);
+            }
+            
+            public void FileAnswer(string filename,long real_filesize)
+            {
+                if (socket != null && File.Exists(filename))
+                {
+                    if (!socket.Connected) return;
+                    try
+                    {
+                        file_answer_stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        if (file_answer_stream.CanRead)
+                        {
+                            if (real_filesize == -1)
+                                file_real_filesize = file_answer_stream.Length;
+                            else file_real_filesize = real_filesize;
+                            send_bytes_length = file_answer_buffer_size;
+                            if (file_answer_stream.Length < send_bytes_length)
+                                send_bytes_length =(int) file_answer_stream.Length;
+                            if (file_real_filesize < send_bytes_length)
+                                send_bytes_length = (int)file_real_filesize;
+                            byte[] body_bytes = new byte[send_bytes_length];
+                            file_answer_stream.Read(body_bytes, 0, send_bytes_length);
+                            //send_bytes_length = send_bytes.Length;
+                            //add header in front of the answer
+                            //substract the header size from the first answer_callback bytes value
+                            string type = MiniWebServer.GetMimeType(filename);
+                            //Content-Disposition: attachment; filename=genome.jpeg;
+                            //   Content-Disposition: inline
+                            //   Content-Description: just a small picture of me
+                            //Content-Disposition: inline; filename=\""+Path.GetFileName(filename)+"\";\r\n
+                            string header_string = MiniWebServer.HttpVersion + " 200 OK\r\nSERVER: MiniWebServer\r\nContent-Type: " + type + "\r\nContent-Length: " + file_real_filesize + "\r\nConnection: Close\r\n\r\n";
+                            byte[] header = System.Text.Encoding.Default.GetBytes(header_string);
+                            file_answer_header_length = header.Length;
+                            send_bytes_length = header.Length + send_bytes_length;
+                            byte[] send_bytes = new byte[send_bytes_length];
+                            header.CopyTo(send_bytes, 0);
+                            body_bytes.CopyTo(send_bytes, header.Length);
+                            
+
+                            socket.BeginSend(send_bytes, 0, send_bytes.Length, SocketFlags.None, new AsyncCallback(FileAnswerCallback), socket);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("Error sending file answer to web client: " + e.Message);
+                    }
+                }
+            }
+
+            protected void FileAnswerCallback(IAsyncResult ar)
+            {
+                Socket file_answer_socket = (Socket)ar.AsyncState;
+                try
+                {
+                    int bytes = file_answer_socket.EndSend(ar);
+                    
+                    //check if send_bytes_length == bytes ?
+
+                    //add bytes to total number of transfered bytes
+                    file_answer_transfered_bytes += bytes;
+                    //check if total_number == real_filesize
+                    if (file_answer_transfered_bytes == file_real_filesize+file_answer_header_length)
+                    {
+                        return;
+                    }
+                    //read next values into temp buffer
+                    //if no values available wait for 250ms periods until timeout was hit or
+                    //new values could be read 
+                    //if timeout happened just disconnect
+                    send_bytes_length = 0;
+                    int temp_timeout = 0;
+                    byte[] send_bytes = new byte[file_answer_buffer_size];
+                    while (send_bytes_length == 0 && temp_timeout < (file_answer_timeout * 1000))
+                    {
+                        send_bytes_length = file_answer_stream.Read(send_bytes, 0,file_answer_buffer_size);
+                        if (send_bytes_length == 0)
+                        {
+                            Thread.Sleep(250);
+                            temp_timeout += 250;
+                        }
+                    }
+                    if (send_bytes_length == 0)
+                    {//reading timed out
+                        Disconnect();
+                    }
+                    //send temp buffer
+                    socket.BeginSend(send_bytes, 0, send_bytes_length, SocketFlags.None, new AsyncCallback(FileAnswerCallback), socket);
+
+
+                    //Disconnect();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("exception during send of file answer: " + ex.Message);
+                }
+            }
+
+
+            public void Answer(byte[] send_bytes)
             {
                 if (socket != null)
                 {
                     if (!socket.Connected) return;
                     try
                     {
-                        string header_string = "HTTP/1.1 200 OK\r\nSERVER: MiniWebServer\r\nContent-Type: "+type+"\r\nContent-Length: " + content.Length + "\r\nConnection: Close\r\n\r\n";
-                        byte[] header = System.Text.Encoding.Default.GetBytes(header_string);
-                        byte[] send_bytes = new byte[header.Length + content.Length];
-                        header.CopyTo(send_bytes, 0);
-                        content.CopyTo(send_bytes, header.Length);
-
+                        send_bytes_length = send_bytes.Length;
                         socket.BeginSend(send_bytes, 0, send_bytes.Length, SocketFlags.None, new AsyncCallback(AnswerCallback), socket);
                     }
                     catch (Exception e)
@@ -153,28 +415,26 @@ namespace DCPlusPlus
 
             }
 
+            public void Answer(byte[] content, string type)
+            {
+                string header_string = MiniWebServer.HttpVersion + " 200 OK\r\nSERVER: MiniWebServer\r\nContent-Type: " + type + "\r\nContent-Length: " + content.Length + "\r\nConnection: Close\r\n\r\n";
+                byte[] header = System.Text.Encoding.Default.GetBytes(header_string);
+                byte[] send_bytes = new byte[header.Length + content.Length];
+                header.CopyTo(send_bytes, 0);
+                content.CopyTo(send_bytes, header.Length);
+                Answer(send_bytes);
+            }
+
             public void Answer(string content, string type)
             {
-                Answer("HTTP/1.1 200 OK\r\nSERVER: MiniWebServer\r\nContent-Type: " + type + "\r\nContent-Length: " + content.Length + "\r\nConnection: Close\r\n\r\n" + content);
+                Answer(MiniWebServer.HttpVersion + " 200 OK\r\nSERVER: MiniWebServer\r\nContent-Type: " + type + "\r\nContent-Length: " + content.Length + "\r\nConnection: Close\r\n\r\n" + content);
             }
 
 
             public void Answer(string answer)
             {
-                if (socket != null)
-                {
-                    if (!socket.Connected) return;
-                    try
-                    {
-                        byte[] send_bytes = System.Text.Encoding.Default.GetBytes(answer);
-                        socket.BeginSend(send_bytes, 0, send_bytes.Length, SocketFlags.None, new AsyncCallback(AnswerCallback), socket);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("Error sending answer to web client: " + e.Message);
-                    }
-                }
-
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(answer);
+                Answer(send_bytes);
             }
             //TODO add event to let the system know the request was finished
 
@@ -189,6 +449,7 @@ namespace DCPlusPlus
                 try
                 {
                     int bytes = answer_socket.EndSend(ar);
+                    //Console.WriteLine(send_bytes_length + " Bytes scheduled and "+bytes+" Bytes were delivered.");
                     //Disconnect();
                 }
                 catch (Exception ex)
@@ -197,7 +458,7 @@ namespace DCPlusPlus
                 }
             }
 
-            public delegate void RequestReceivedEventHandler(Client client,Request request);
+            public delegate void RequestReceivedEventHandler(Client client, Request request);
             public event RequestReceivedEventHandler RequestReceived;
 
             public Client(Socket client_socket)
@@ -236,6 +497,14 @@ namespace DCPlusPlus
                 get { return version; }
                 set { version = value; }
             }
+
+            private string body;
+
+            public string Body
+            {
+                get { return body; }
+                set { body = value; }
+            }
 	
             private bool is_valid=true;
 
@@ -252,6 +521,27 @@ namespace DCPlusPlus
                 get { return request_client; }
             }
 
+            public class ValuePair
+            {
+                public string key = "";
+                public string value = "";
+            }
+
+            private List<ValuePair> query_values = new List<ValuePair>();
+
+            public List<ValuePair> QueryValues
+            {
+                get { return query_values; }
+                set { query_values = value; }
+            }
+
+            private List<ValuePair> post_values = new List<ValuePair>();
+
+            public List<ValuePair> PostValues
+            {
+                get { return post_values; }
+                set { post_values = value; }
+            }
 	
             private WebHeaderCollection headers= new WebHeaderCollection();
 
@@ -260,30 +550,61 @@ namespace DCPlusPlus
                 get { return headers; }
                 set { headers = value; }
             }
+
+            private string auth_username="";
+
+            public string AuthUsername
+            {
+                get { return auth_username; }
+                set { auth_username = value; }
+            }
+
+
+            private string auth_password="";
+
+            public string AuthPassword
+            {
+                get { return auth_password; }
+                set { auth_password = value; }
+            }
 	
+            /// <summary>
+            /// check the basic authentication header contents 
+            /// against the specified credentials
+            /// </summary>
+            /// <param name="username">the username the client should have specified to fetch a resource</param>
+            /// <param name="password">the password of the user</param>
+            /// <returns>TRUE if credentials match</returns>
+            public bool CheckAuthentication(string username, string password)
+            {
+                if (auth_username == username && auth_password == password)
+                    return (true);
+                return (false);
+            }
+
 	
-            public Request(string request_string,Client request_client)
+            public Request(string header_string,string body_string,Client request_client)
             {
                 if (request_client == null) 
                     is_valid = false;
                 this.request_client = request_client;
                 //Console.WriteLine("Initiating Request from request string: "+request_string);
                 string[] seps = {"\r\n"};
-                string[] header_lines = request_string.Split(seps,StringSplitOptions.RemoveEmptyEntries);
+                string[] header_lines = header_string.Split(seps,StringSplitOptions.None);
                 if (header_lines.Length > 0)
                 {
                     string[] seps2 ={ " " };
-                    string[] request_line_parts = header_lines[0].Split(seps2, StringSplitOptions.RemoveEmptyEntries);
-                    if (request_line_parts.Length >= 3)
+                    string[] header_line_parts = header_lines[0].Split(seps2, StringSplitOptions.RemoveEmptyEntries);
+                    if (header_line_parts.Length >= 3)
                     {
-                        method = request_line_parts[0];
-                        url = request_line_parts[1];
-                        version = request_line_parts[2];
+                        method = header_line_parts[0];
+                        url = header_line_parts[1];
+                        version = header_line_parts[2];
 
                         int i = 0;
                         foreach (string line in header_lines) //i know i should skip the first line , but this is so convenient
                         {//read header values into our headers list
-                            if (line == "\r\n\r\n")
+                            if (line == "\r\n")
                                 break;
                             if (i++ != 0)
                             {//skipping the first line which is not a header
@@ -300,6 +621,50 @@ namespace DCPlusPlus
 
                             }
                         }
+
+                        //retrieve values from post body if type== x-www-form-url-encoded
+                        //get query values from url if present ?
+                        body = body_string;
+                        //check if post and query values were given in body
+                        string content_type = headers.Get("Content-Type");
+                        if (content_type == "application/x-www-form-urlencoded")
+                        {
+                            //Console.WriteLine("body: " + body_string);
+                            ParseValues(body_string, true);
+                        }
+                        //check if url contains query values
+                        int query_start=url.IndexOf("?");
+                        if (query_start != -1)
+                        {
+                            if (query_start + 1 < url.Length)
+                            {
+                                string query = url.Substring(query_start + 1);
+                                ParseValues(query, false);
+                            }
+                            url = url.Substring(0, query_start);
+                        }
+                        
+
+                        //check headers for basic authentification
+                        string auth_value = headers.Get("Authorization");
+                        if (!string.IsNullOrEmpty(auth_value))
+                        {
+                            string[] seps3 = { " "};
+                            string[] fields = auth_value.Split(seps3,StringSplitOptions.RemoveEmptyEntries);
+                            if (fields.Length == 2)
+                            {
+                                byte[] decode = Convert.FromBase64String(fields[1]);
+                                string creds = System.Text.Encoding.Default.GetString(decode);
+                                //Console.WriteLine("creds: "+creds);
+                                int colon_pos2 = creds.IndexOf(":");
+                                if (colon_pos2 != -1)
+                                {
+                                    auth_username = creds.Substring(0, colon_pos2);
+                                    auth_password = creds.Substring(colon_pos2 + 1);
+                                }
+                            }
+                        }
+
                     }
                     else
                     {
@@ -313,12 +678,94 @@ namespace DCPlusPlus
                     is_valid = false;
                 }
             }
+
+            private string GetValue(string key, List<ValuePair> values)
+            {
+                foreach (ValuePair pair in values)
+                {
+                    if (pair.key == key)
+                        return (pair.value);
+                }
+                return ("");
+            }
+
+            public string GetPostValue(string key)
+            {
+                return (GetValue(key,post_values));
+            }
+            public string GetQueryValue(string key)
+            {
+                return (GetValue(key,query_values));
+            }
+
+
+            private void ParseValues(string value_string, bool are_post_values)
+            {
+                //Console.WriteLine("values: " + value_string);
+                string[] seps = { "&", ";" };
+                string[] pairs = value_string.Split(seps, StringSplitOptions.RemoveEmptyEntries);
+                foreach (string pair in pairs)
+                {
+                    string[] seps2 = { "=" };
+                    string[] parts = pair.Split(seps2, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 2)
+                    {//found a key/value pair
+                        ValuePair vp = new ValuePair();
+                        vp.key = parts[0];
+                        vp.value = UnEscape(parts[1]);
+
+                        if (are_post_values)
+                            post_values.Add(vp);
+                        else
+                            query_values.Add(vp);
+                    }
+                }
+            }
+
+            private string UnEscape(string url_encoded_string)
+            {
+                string decoded = "";
+                int i = 0;
+                while (i < url_encoded_string.Length)
+                {
+                    if (url_encoded_string[i] == '%')
+                    {//found an encoded letter
+                        i++;
+                        string encoded = url_encoded_string.Substring(i,2);
+                        i++;
+                        int num = int.Parse(encoded, System.Globalization.NumberStyles.AllowHexSpecifier);
+                        char c = (char)num;
+                        decoded += c.ToString();
+                    }
+                    else decoded += url_encoded_string[i];
+                    i++;
+                }
+                return (decoded);
+            }
+
         }
 
         public delegate void RequestReceivedEventHandler(MiniWebServer server, Request request);
         public event RequestReceivedEventHandler RequestReceived;
+        /// <summary>
+        /// Updates the local ip address
+        /// stores it in the IP property
+        /// </summary>
+        private void UpdateIP()
+        {
+            string host_name = Dns.GetHostName();
+            IPHostEntry host_entry = Dns.GetHostEntry(host_name);
+            if (host_entry.AddressList.Length == 0) return;//computer has not one network interface ;-( i bet this one will never a case anywhere, but better catch it *g*
+            ip = host_entry.AddressList[0].ToString();
+        }
+        private string ip;
 
-        private int port;
+        public string IP
+        {
+            get { return ip; }
+            set { ip = value; }
+        }
+        private int port=0;
 
         public int Port
         {
@@ -406,6 +853,7 @@ namespace DCPlusPlus
                 }
             }
         }
+
         public void CloseListeningSocket()
         {
             //close the listening socket if openened
@@ -438,13 +886,13 @@ namespace DCPlusPlus
             }
 
         }
+        
         public void Close()
         {
             CloseListeningSocket();
         }
 
         private List<Client> clients = new List<Client>();
-
         /// <summary>
         /// Callback to accept tcp connections
         /// </summary>
@@ -492,13 +940,13 @@ namespace DCPlusPlus
             }
             else Console.WriteLine("Accept on tcp socket aborted.");
         }
-
-
+        /// <summary>
+        /// Mini Web Server Constructor
+        /// </summary>
         public MiniWebServer()
         {
-
+            UpdateIP();
         }
-
         #region Unit Testing
         /// <summary>
         /// Test to see if opening and closing the mini web server works as expected
@@ -664,8 +1112,88 @@ namespace DCPlusPlus
             Console.WriteLine("Mini Web Server Request Test successful.");
 
         }
+        /// <summary>
+        /// Test to see if the mini web server acts expected when a request was received
+        /// using the file answer method
+        /// (running automatically)
+        /// </summary>
+        [Test]
+        public void TestMiniWebServerAutoFileAnswerRequest()
+        {
+            Console.WriteLine("Test to see if requesting using the file answer method works.");
+            MiniWebServer server = new MiniWebServer();
+            server.Port = 80;
+            server.SetupListeningSocket();
+            long page_len = 0;
+            bool wait = true;
+            server.RequestReceived += delegate(MiniWebServer request_server, MiniWebServer.Request request)
+            {
+                Console.WriteLine("Request received: ");
+                Console.WriteLine("URL: " + request.Url);
+                Console.WriteLine("Method: " + request.Method);
+                Console.WriteLine("Version: " + request.Version);
+                Console.WriteLine("Headers:");
+                foreach (string key in request.Headers.Keys)
+                {
+                    Console.WriteLine("[" + key + "]" + ":[" + request.Headers.Get(key) + "]");
+                }
+                //request.RequestClient.TellNotFound();
 
+                //request.RequestClient.Answer("HTTP/1.0 302 Moved Temporarily\r\nSERVER: MiniWebServer\r\nLOCATION: http://192.168.0.1:80/Public_UPNP_gatedesc.xml\r\n\r\n");
+                if (request.Url == "/")
+                {
+                    string page = "";
+                    //string type = "text/plain";
+                    page = "<html>\n<head>\n<title>MiniWebServer Test Page</title>\n</head>\n<body bgcolor=\"#333355\">Test Page of the Miniwebserver running on port: " + server.Port + "<br><a href=\"/test.mp3\">Test Mp3</a></body>\n</html>\n";
+                    string type = "text/html";
+                    page_len = page.Length;
+                    request.RequestClient.Answer(page, type);
+                }
+                else if (request.Url == "/test.mp3")
+                {
+                    FileInfo fi = new FileInfo("..\\..\\..\\TestDateien\\test.mp3");
+                    page_len = fi.Length;
+                    request.RequestClient.FileAnswer("..\\..\\..\\TestDateien\\test.mp3");
+                }
+
+                //request.RequestClient.Answer("HTTP/1.1 200 OK\r\nSERVER: MiniWebServer\r\nContent-Type: text/plain\r\nContent-Length: " + page.Length + "\r\nConnection: Close\r\n\r\n" + page);
+
+                //Thread.Sleep(300);
+                //request.RequestClient.Disconnect();
+                //Assert.IsTrue(!string.IsNullOrEmpty(ex_ip_completed.MyIP), "no ip address fetched");
+                //wait = false;
+            };
+
+            WebClient wc = new WebClient();
+            wc.DownloadDataCompleted += delegate(object sender, DownloadDataCompletedEventArgs e)
+            {
+                if (!e.Cancelled)
+                {
+                    Assert.IsTrue(page_len == e.Result.Length, "Test failed: received an incomplete page");
+                    wait = false;
+                }
+            };
+            wc.DownloadDataAsync(new Uri("http://127.0.0.1/test.mp3"));
+
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 120))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    Assert.Fail("Operation took too long");
+                    wait = false;
+                }
+                Console.Write(".");
+                Thread.Sleep(250);
+            }
+            Console.WriteLine("");
+            server.CloseListeningSocket();
+            Console.WriteLine("Mini Web Server Request using File Answer Method Test successful.");
+
+        }
         #endregion
-
     }
 }

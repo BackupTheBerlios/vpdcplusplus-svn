@@ -301,6 +301,26 @@ namespace DCPlusPlus
 
         }
 
+        private DateTime client_start= DateTime.Now;
+        /// <summary>
+        /// The instant in time at which the client was started 
+        /// </summary>
+        public DateTime ClientStart 
+        {
+            get { return client_start; }
+        }
+        /// <summary>
+        /// The Uptime of the client represented in seconds
+        /// </summary>
+        public long Uptime
+        {
+            get
+            {
+                TimeSpan temp = DateTime.Now - client_start;
+                return ((long)temp.TotalSeconds);
+            }
+        }
+
         private DateTime last_search_time_stamp; //TODO initialize to DateTime.Now - search_interval
         private bool CanSearch()
         {
@@ -334,6 +354,17 @@ namespace DCPlusPlus
             }
         }
 
+
+        private bool auto_remove_downloads=true;
+        /// <summary>
+        /// if TRUE ,client will automatically remove finished downloads from queue
+        /// </summary>
+        public bool AutoRemoveDownloads
+        {
+            get { return auto_remove_downloads; }
+            set { auto_remove_downloads = value; }
+        }
+	
 
         /// <summary>
         /// Search for something on all hubs
@@ -689,6 +720,17 @@ namespace DCPlusPlus
             return (ret);
         }
         /// <summary>
+        /// Remove all finished downloads from queue
+        /// </summary>
+        public void RemoveFinishedDownloadsFromQueue()
+        {
+            foreach (Queue.QueueEntry entry in download_queue)
+            {
+                if (entry.FilesizeOnDisk == entry.Filesize)
+                    download_queue.Remove(entry);
+            }
+        }
+        /// <summary>
         /// Start the next download in line for a specific user
         /// this will search for another queue entry for this user
         /// and if found start it 
@@ -884,7 +926,8 @@ namespace DCPlusPlus
             client.Completed += delegate(Peer completed_client)
             {
                 //download_queue.Remove(download_queue.FindQueueEntryByOutputFilename(completed_client.OutputFilename));
-                download_queue.Remove(completed_client.QueueEntry);
+                if(auto_remove_downloads)
+                    download_queue.Remove(completed_client.QueueEntry);
                 ContinueWithQueueForUser(completed_client.PeerNick);
                 if (PeerCompleted != null)
                     PeerCompleted(completed_client);

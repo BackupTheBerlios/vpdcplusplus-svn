@@ -17,6 +17,8 @@ namespace DCPlusPlus
         //                simplify byte counters , tthl download , download to file or queue entry field
         //                filelists
         // DataReceivedEventResolution in bytes after which a data received event is fired to reduce load on the gui
+        //
+        // some connections won't disconnect and stack up in our listview after a while
 
         public delegate void ConnectedEventHandler(Peer peer);
         public event ConnectedEventHandler Connected;
@@ -1196,7 +1198,14 @@ namespace DCPlusPlus
         {
             if (stream != null)
             {
-                stream.Close();
+                try
+                {
+                    stream.Close();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error closing stream: "+ex.Message);
+                }
             }
             if (is_connected || is_connecting)
             {

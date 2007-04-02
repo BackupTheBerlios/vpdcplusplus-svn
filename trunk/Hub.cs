@@ -1602,10 +1602,10 @@ namespace DCPlusPlus
                             Console.WriteLine("error parsing ints in search: " + ex.Message);
                             break;
                         }
-                        if (search_parameters[4].StartsWith("TTH:") && search.file_type == SearchFileType.tth)
+                        if (search_parameters[4].StartsWith("TTH:") && search.file_type == SearchFileType.tth && search_parameters[4].Length > 4)
                             search.tth = search_parameters[4].Substring(4);
                         else search.search_string = search_parameters[4];
-
+                        //TODO above throws exceptions
                         if (SearchReceived != null)
                             SearchReceived(this,search);
                         break;

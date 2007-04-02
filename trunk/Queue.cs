@@ -859,6 +859,28 @@ namespace DCPlusPlus
             }
             return (ret);
         }
+        /// <summary>
+        /// Find the first queue entry with a specific filename (without path)
+        /// </summary>
+        /// <param name="filename">the filename to search for</param>
+        /// <returns>a queue entry matching the filename specified or NULL</returns>
+        public Queue.QueueEntry FindQueueEntryByFilename(string filename)
+        {
+            QueueEntry ret = null;
+            lock (queue_lock)
+            {
+                foreach (Queue.QueueEntry entry in items)
+                {
+                    if (Path.GetFileName(entry.OutputFilename) == filename)
+                    {
+                        ret = entry;
+                        break;
+                    }
+                }
+            }
+            return (ret);
+        }
+
         public Queue.QueueEntry FindQueueEntryByTTH(string tth)
         {
             QueueEntry ret = null;
