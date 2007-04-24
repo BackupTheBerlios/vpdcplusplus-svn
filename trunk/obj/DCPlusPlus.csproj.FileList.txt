@@ -8,3 +8,7 @@ bin\Debug\DCPlusPlus.pdb
 obj\Debug\ResolveAssemblyReference.cache
 obj\Debug\DCPlusPlus.dll
 obj\Debug\DCPlusPlus.pdb
+obj\Release\DCPlusPlus.RssControl.resources
+obj\Release\DCPlusPlus.csproj.GenerateResource.Cache
+obj\Debug\DCPlusPlus.RssControl.resources
+obj\Debug\DCPlusPlus.csproj.GenerateResource.Cache

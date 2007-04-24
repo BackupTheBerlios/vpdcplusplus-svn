@@ -7,19 +7,18 @@ using System.Net;
 using System.Net.Sockets;
 using System.Xml;
 using System.IO;
+using System.Timers;
 
 namespace DCPlusPlus
 {
-    //TODO add MediaRenderer support + mini web server to stream downloads to the MediaRenderer
-    //     add upnp lights support  (i.e. dim selected light to a defined percentage or turn them out completely
-    //     if a video stream is beeing played ... (i will not be able to debug this in rl ;-) )
-
     /// <summary>
-    /// A simple class to use Routers
+    /// A simple class to use Routers,
+    /// Binary Lights,Media Renderers
     /// who support the UPnP Protocol
+    /// and can provide a local media
+    /// browser
     /// takes care of discovery and
-    /// can setup port mappings and
-    /// tell the external ip address
+    /// announces local devices
     /// 
     /// (big thanks to Zac Bowling for providing such a nice intro for Upnp 
     /// http://zbowling.com/projects/upnp/)
@@ -706,11 +705,6 @@ namespace DCPlusPlus
                     }
                 }
             }
-            //TODO maybe urls can get screwed up sometimes the way it is now (base url / or no / )
-            private string GetFixedURL(string url)
-            {//checks if url needs some rebuilding
-                return (url);
-            }
 
             private void GetDeviceDescription(string xml)
             {
@@ -939,8 +933,9 @@ namespace DCPlusPlus
                 set { device_id = value; }
             }
 
-            public abstract string Control(MiniWebServer.Request request,string service_id);
-            public abstract string Event(MiniWebServer.Request request,string service_id);
+            public abstract string Control(MiniWebServer.Request request, int service_index);
+            public abstract string Event(MiniWebServer.Request request, int service_index); //TODO maybe change string service_id to SubDevice.Service service
+            public abstract string Description(MiniWebServer.Request request, int service_index);
 
             public LocalDevice()
             {
@@ -948,7 +943,6 @@ namespace DCPlusPlus
             }
 
         }
-        
         /// <summary>
         /// a class to represent an upnp device's subdevice
         /// </summary>
@@ -1219,7 +1213,14 @@ namespace DCPlusPlus
                 private int number_returned = 0;
 	            public int NumberReturned
 	            {
-		            get { return number_returned;}
+                    /*get 
+                    {
+                        if (auto_index) return number_returned;
+                        else return items.Count; 
+                    }*/
+                    
+                    //get { return items.Count; }
+                    get { return number_returned;}
 		            //set { number_returned = value;}
             	}
                 private int total_matches = 0;
@@ -1230,16 +1231,58 @@ namespace DCPlusPlus
 		            set { total_matches = value;}
 	            }
                 private int update_id = 0;
-    
+
+                private bool auto_index=false;
+
+                public bool AutoIndex
+                {
+                    get { return auto_index; }
+                    set { auto_index = value; }
+                }
+
+                private List<string> items = new List<string>();
+
+                private string didl_start = "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">";
+                private string didl_end = "</DIDL-Lite>";
+                public string Didl
+                {
+                    get
+                    {//compile didl string
+                        string ret = didl_start;
+                        foreach (string item in items)
+                            ret += item;
+                        return (ret + didl_end);
+                    }
+                }
+
             	public int UpdateID
 	            {
 		            get { return update_id;}
 		            set { update_id = value;}
 	            }
 
+                public string GetIndexedDidl(int starting_index, int requested_count)
+                {
+                    int results_num = items.Count;
+                    string ret = didl_start;
+                    //number_returned = items.Count;
+                    if (starting_index >= 0)
+                    {
+                        if (starting_index + requested_count >= results_num)
+                            requested_count = results_num - starting_index;
+                        for (int i = starting_index; i < starting_index + requested_count; i++)
+                        {
+                            ret += items[i];
+                        }
+                        number_returned = requested_count;
+                    }
+                    return (ret + didl_end);
+                }
+
                 public void AddFolder(string title, string id, string parent_id, bool searchable, bool restricted, int child_count, string write_status, long storage_used)
                 {
                     //didl += 
+                    string didl = "";
                     didl += "<container id=\""+id+"\" ";
                     if(searchable)
                         didl += "searchable=\"1\"";
@@ -1254,18 +1297,12 @@ namespace DCPlusPlus
                     didl += "<upnp:storageUsed>"+storage_used+"</upnp:storageUsed>";
                     didl += "<upnp:writeStatus>"+write_status+"</upnp:writeStatus>";
                     didl += "</container>";
-                    /*
-                    didl += "<container id=\"0000000000000001\" searchable=\"1\" parentID=\"0\" restricted=\"0\" childCount=\"2\">";
-                    didl += "<dc:title>Winamp Media Library</dc:title>";
-                    didl += "<upnp:class>object.container.storageFolder</upnp:class>";
-                    didl += "<upnp:storageUsed>-1</upnp:storageUsed>";
-                    didl += "<upnp:writeStatus>UNKNOWN</upnp:writeStatus>";
-                    didl += "</container>";*/
-                    //didl += ;
+                    items.Add(didl);
                     number_returned++;
                 }
-                public void AddItem(string title,string creator,string url,string content_type,string id,string parent_id,bool restricted,long size,string write_status,string res_title)
+                public void AddItem(string title,string creator,string url,string content_type,string id,string parent_id,bool restricted,long size,string write_status)
                 {
+                    string didl = "";
                     didl += "<item id=\""+id+"\" parentID=\""+parent_id+"\" ";
                     if(restricted)
                     didl += "restricted=\"1\"";
@@ -1278,45 +1315,140 @@ namespace DCPlusPlus
                     //didl += "<res protocolInfo=\"http-get:*:" + content_type + ":*\" size=\"" + size + "\" importUri=\"" + url + "\">" + res_title + "</res>";
                     didl += "<res protocolInfo=\"http-get:*:" + content_type + ":*\" size=\"" + size + "\" importUri=\"" + url + "\">" + url + "</res>";
                     didl += "</item>";
-                    /*
-                    didl += "<item id=\"000000000000164E\" parentID=\"0\" restricted=\"0\">";
-                    didl += "<dc:title>Test Phat Mp3</dc:title>";
-                    didl += "<upnp:class>object.item</upnp:class>";
-                    didl += "<dc:creator>pez2001</dc:creator>";
-                    didl += "<upnp:writeStatus>UNKNOWN</upnp:writeStatus>";
-                    didl += "<res protocolInfo=\"http-get:*:audio/mpeg:*\" size=\"1\" importUri=\"http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3\">http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3</res>";
-                    didl += "</item>";*/
+                    items.Add(didl);
                     number_returned++;
                 }
-                private string didl = "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">";
-                public string Didl
-                {
-                    get
-                    {//compile didl string
-                        return (didl + "</DIDL-Lite>");
 
-                    }
+                public void Clear()
+                {
+                    items.Clear();
+                    total_matches = 0;
+                    number_returned = 0;
                 }
+
+                public void RemoveRange(int index,int count)
+                {
+                    if (index < 0 || count <= 0 || index >= items.Count)
+                        return;
+                    if (index + count >= items.Count)
+                        count = items.Count - index;
+                    items.RemoveRange(index, count);
+                    total_matches -= count;
+                    number_returned -= count;
+                }
+
 
                 public BrowseResult()
                 {
 
                 }
 
+
+            }
+
+            /// <summary>
+            /// Convert a string to a valid xml string
+            /// (enquoting of invalid characters)
+            /// </summary>
+            /// <param name="org">some string to be converted to a xml string</param>
+            /// <returns>a quoted xml string</returns>
+            private static string ToXmlString(string org)
+            {
+                if (String.IsNullOrEmpty(org)) return ("");
+
+                string tmp = new string(org.ToCharArray());
+                //System.Console.WriteLine("ToXml on string content: '" + tmp+"'");
+                int p = 0;
+                //while ((p = tmp.IndexOf("&", p)) != -1) { tmp = tmp.Replace("&", "&amp;"); if(p<tmp.Length)p++; }
+                List<int> amps = new List<int>();
+                while ((p = tmp.IndexOf("&", p)) != -1)
+                {
+                    //System.Console.WriteLine("ToXml add amp: '" + p + "'");
+                    amps.Add(p);
+                    if (p < tmp.Length - 1) p++;
+                    else break;
+
+
+                }
+                //System.Console.WriteLine("ToXml amp count: '" + amps.Count + "'");
+                for (int i = 0; i < amps.Count; i++)
+                {
+                    //System.Console.WriteLine("ToXml amps["+i+"]: '" + amps[i] + "' length of tmp:"+tmp.Length);
+                    tmp = tmp.Remove(amps[i] + (i * 4), 1);
+                    tmp = tmp.Insert(amps[i] + (i * 4), "&amp;");
+                    //System.Console.WriteLine("ToXml tmp after amp conversion: '" + tmp + "'");
+                }
+
+
+                while (tmp.IndexOf("<") != -1) tmp = tmp.Replace("<", "&lt;");
+                while (tmp.IndexOf(">") != -1) tmp = tmp.Replace(">", "&gt;");
+                while (tmp.IndexOf("\"") != -1) tmp = tmp.Replace("\"", "&quot;");
+                while (tmp.IndexOf("'") != -1) tmp = tmp.Replace("'", "&apos;");
+                for (int i = 0; i < 32; i++)
+                {
+                    char c = Convert.ToChar(i);
+                    if (i != 0x09 && i != 0x0a && i != 0x0d)
+                    {
+                        int pos = -1;
+                        while ((pos = tmp.IndexOf(c)) != -1)
+                        {
+                            tmp = tmp.Remove(pos, 1);
+                            tmp = tmp.Insert(pos, "&#" + Convert.ToString(c, 16) + ";");
+                        }
+                    }
+                }
+                //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
+                return (tmp);
+            }
+            /// <summary>
+            /// Convert a xml string back to a normal string
+            /// (unquoting of invalid characters)
+            /// </summary>
+            /// <param name="org">xml string</param>
+            /// <returns>an unquoted string</returns>
+            private static string FromXmlString(string org)
+            {
+                if (org == null) return ("");
+                string tmp = new string(org.ToCharArray());
+                //System.Console.WriteLine("Stripping Linefeeds on string content: '" + tmp+"'");
+                while (tmp.IndexOf("&amp;") != -1) tmp = tmp.Replace("&amp;", "&");
+                while (tmp.IndexOf("&lt;") != -1) tmp = tmp.Replace("&lt;", "<");
+                while (tmp.IndexOf("&gt;") != -1) tmp = tmp.Replace("&gt;", ">");
+                while (tmp.IndexOf("&quot;") != -1) tmp = tmp.Replace("&quot;", "\"");
+                while (tmp.IndexOf("&apos;") != -1) tmp = tmp.Replace("&apos;", "'");
+                for (int i = 0; i < 32; i++)
+                {
+                    char c = Convert.ToChar(i);
+                    if (i != 0x09 && i != 0x0a && i != 0x0d)
+                    {
+                        int pos = -1;
+                        string s = "&#" + Convert.ToString(c, 16) + ";";
+                        while ((pos = tmp.IndexOf(s)) != -1)
+                        {
+                            tmp = tmp.Remove(pos, s.Length);
+                            tmp = tmp.Insert(pos, c.ToString());
+                        }
+                    }
+                }
+                //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
+                return (tmp);
             }
 
 
-
-            public override string Event(MiniWebServer.Request request, string service_id)
+            public override string Event(MiniWebServer.Request request, int service_index)
             {
+                if (service_index >= root_device.Services.Count)
+                    return ("");//TODO put a real error message in here 
                 //TODO change to void method and send request answer inline
                 //TODO maybe remove request parameter and change to soap_action + body strings
                 return ("");
             }
 
-            public override string Control(MiniWebServer.Request request, string service_id)
+            public override string Control(MiniWebServer.Request request, int service_index)
             {
-                SubDevice.Service control_service = root_device.GetServiceByID(service_id);
+                if (service_index >= root_device.Services.Count)
+                    return ("");//TODO put a real error message in here 
+                SubDevice.Service control_service = root_device.Services[service_index];
                 Console.WriteLine("opened control url of service :" + control_service.ServiceType);
                 //Console.WriteLine("body:" + request.Body);
                 Console.WriteLine("soap action:" + request.Headers.Get("SOAPACTION"));
@@ -1350,15 +1482,26 @@ namespace DCPlusPlus
                     int total_matches = 0;
                     int number_returned = 0;
                     int update_id = 0;
+
                     if (BrowseRequestReceived != null)
                     {
                         BrowseResult result = new BrowseResult();
                         result = BrowseRequestReceived(this, object_id, browse_flag, starting_index, requested_count, sort_criteria);
-                        didl = result.Didl;
-                        total_matches = result.TotalMatches;
+                        if (result.AutoIndex)
+                        {
+                            total_matches = result.NumberReturned;
+                            didl = result.GetIndexedDidl(starting_index, requested_count);
+                        }
+                        else
+                        {
+                            didl = result.Didl;
+                            total_matches = result.TotalMatches;
+                        }
+                        didl = ToXmlString(didl);
                         number_returned = result.NumberReturned;
                         update_id = result.UpdateID;
                     }
+
                     soap_answer += "<Result>" + didl + "</Result>";
                     soap_answer += "<NumberReturned>" + number_returned + "</NumberReturned>";
                     soap_answer += "<TotalMatches>" + total_matches + "</TotalMatches>";
@@ -1372,6 +1515,36 @@ namespace DCPlusPlus
                 return("");
             }
 
+            public override string Description(MiniWebServer.Request request, int service_index)
+            {
+                if (service_index >= root_device.Services.Count)
+                    return ("");//TODO put a real error message in here 
+                string ret = "";
+                if (root_device.Services[service_index].ServiceType == "schemas-upnp-org:service:ConnectionManager:1")
+                {
+                    try
+                    {
+                        ret = File.ReadAllText(".\\web\\ConnectionManager.scpd");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("error reading service description file: " + ex.Message);
+                    }
+                }
+                else if (root_device.Services[service_index].ServiceType == "schemas-upnp-org:service:ContentDirectory:1")
+                {
+                    try
+                    {
+                        ret = File.ReadAllText(".\\web\\ContentDirectory.scpd");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("error reading service description file: " + ex.Message);
+                    }
+
+                }
+                return (ret);
+            }
             /// <summary>
             /// Event handler that gets called
             /// when a browse request was received
@@ -1403,7 +1576,7 @@ namespace DCPlusPlus
                 spec_version_major = 1;
                 spec_version_minor = 0;
                 unique_service_name = "schemas-upnp-org:device:MediaServer:1";
-                universal_unique_id = "aabbaadd-0000-0000-0000-00000000000"+device_id;//TODO change to FormatStringVersion to add zeros in front of device_id if less than 1000
+                universal_unique_id = "00000000-FFEE-0000-0000-00000FF0000" + device_id;//TODO change to FormatStringVersion to add zeros in front of device_id if less than 1000
                 root_device = new SubDevice();
                 root_device.DeviceType = "schemas-upnp-org:device:MediaServer:1";//urn:
                 root_device.FriendlyName = "vpMediaServer";
@@ -1414,16 +1587,16 @@ namespace DCPlusPlus
                 root_device.ModelNumber = "0.1";
                 root_device.ModelUrl = "http://www.voyagerproject.org";
                 root_device.PresentationUrl = "http://www.voyagerproject.org";
-                root_device.UniversalUniqueID = "a310a1fd-e86f-42f1-b5b5-fcc59e8b66ff";//uuid:
+                root_device.UniversalUniqueID = "00000000-FFEE-0000-0000-00000FF0000" + device_id;//uuid:
                 SubDevice.Service connection_manager = new SubDevice.Service();
                 SubDevice.Service content_directory = new SubDevice.Service();
                 connection_manager.ServiceType = "schemas-upnp-org:service:ConnectionManager:1";
-                connection_manager.ServiceID = "a310a1fd-e86f-42f1-b5b5-fcc59e8b67ff";
+                connection_manager.ServiceID = "urn:upnp-org:serviceId:ConnectionManager";
                 connection_manager.ControlUrl = "";
                 connection_manager.EventSubUrl = "";
                 connection_manager.SCPDUrl = "";
                 content_directory.ServiceType = "schemas-upnp-org:service:ContentDirectory:1";
-                content_directory.ServiceID = "a310a1fd-e86f-42f1-b5b5-fcc59e8b68ff";
+                content_directory.ServiceID = "urn:upnp-org:serviceId:ContentDirectory";
                 content_directory.ControlUrl = "";
                 content_directory.EventSubUrl = "";
                 content_directory.SCPDUrl = "";
@@ -1699,6 +1872,12 @@ namespace DCPlusPlus
                             bool successful = false;
                             if (request_successful)
                             {
+                                //TODO ===||
+                                //        \/
+                                //XmlNamespaceManager nsMgr = new XmlNamespaceManager(myXmlDoc.NameTable);
+                                //nsMgr.AddNamespace("s", "http://schemas.xmlsoap.org/soap/envelope/");
+                                //nsMgr.AddNamespace("m", power_switch.ServiceType);
+                                //XmlNode urlNodes = doc.SelectNodes("/s:Body/s:m");
                                 //Console.WriteLine("Soap Response: \n" + request_finished_soap.Response);
                                 string[] seps = { "\r\n" };
                                 string[] lines = request_finished_soap.Response.Split(seps, StringSplitOptions.RemoveEmptyEntries);
@@ -2554,7 +2733,17 @@ namespace DCPlusPlus
         /// </summary>
         /// <param name="device">the device that was discovered</param>
         public delegate void DeviceDiscoveredEventHandler(Device device);
-       
+
+        private int max_age=90;
+
+        public int MaxAge
+        {
+            get { return max_age; }
+            set { max_age = value; }
+        }
+
+
+
         /*
         /// <summary>
         /// Event handler that gets called
@@ -2576,7 +2765,13 @@ namespace DCPlusPlus
             {
                 //string discovery_message = "M-SEARCH * HTTP/1.1\r\nHOST: " + upnp_udp_multicast_address + ":"+upnp_udp_port+"\r\nST: upnp:rootdevice\r\nMAN: \"ssdp:discover\"\r\nMX: 3\r\n\r\n\r\n";            
                 //string discovery_message = "M-SEARCH * HTTP/1.1\r\nST: upnp:rootdevice\r\nMX: 3\r\nMAN: \"ssdp:discover\"\r\nHOST: 239.255.255.250:1900\r\n\r\n\r\n";
-                string discovery_message = "M-SEARCH * HTTP/1.1\r\nST: ssdp:all\r\nMX: 3\r\nMAN: \"ssdp:discover\"\r\nHOST: 239.255.255.250:1900\r\n\r\n\r\n";
+                string discovery_message = "M-SEARCH * HTTP/1.1\r\n";
+                discovery_message += "HOST: 239.255.255.250:1900\r\n";
+                discovery_message += "ST: ssdp:all\r\n";
+                discovery_message += "MX: 10\r\n";
+                discovery_message += "MAN: \"ssdp:discover\"\r\n";
+                discovery_message += "CONTENT-LENGTH: 0\r\n";
+                discovery_message += "\r\n";
 
                 //Console.WriteLine("Starting Discovery by sending : " + discovery_message);
                 IPEndPoint udp_discovery_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
@@ -2612,11 +2807,189 @@ namespace DCPlusPlus
         {
             try
             {
-                string announce_message = "HTTP/1.1 200 OK\r\nCache-Control:max-age=120\r\nLocation:http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\nNT:urn:" + device.UniqueServiceName + "\r\nUSN:uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\nST: uuid:"+device.UniversalUniqueID+"\r\nServer:NT/5.0 UPnP/1.0\r\n\r\n\r\n";
-
+                //string announce_message = "HTTP/1.1 200 OK\r\nCACHE-CONTROL:max-age=" + max_age + "\r\nLOCATION:http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\nNT:urn:" + device.UniqueServiceName + "\r\nUSN:uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\nST: uuid:" + device.UniversalUniqueID + "\r\nServer:NT/5.0 UPnP/1.0\r\n\r\n";
+                string reply_message = "HTTP/1.1 200 OK\r\n";
+                reply_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                reply_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                reply_message += "USN: uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\n";
+                reply_message += "ST: urn:" + device.UniqueServiceName + "\r\n";
+                reply_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                reply_message += "\r\n";
                 //IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(reply_message);
+                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, destination, new AsyncCallback(ReplyDeviceCallback), udp_send_socket);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception during sending of device reply packet: " + ex.Message);
+            }
+
+        }
+        /// <summary>
+        /// Callback for the Reply Device async send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
+        protected void ReplyDeviceCallback(IAsyncResult ar)
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = socket.EndSend(ar);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of device reply packet: " + ex.Message);
+            }
+        }
+        private void ReplyRootDevice(LocalDevice device, IPEndPoint destination)
+        {
+            try
+            {
+                //string announce_message = "HTTP/1.1 200 OK\r\nCACHE-CONTROL:max-age=" + max_age + "\r\nLOCATION:http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\nNT:urn:" + device.UniqueServiceName + "\r\nUSN:uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\nST: uuid:" + device.UniversalUniqueID + "\r\nServer:NT/5.0 UPnP/1.0\r\n\r\n";
+                string reply_message = "HTTP/1.1 200 OK\r\n";
+                reply_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                reply_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                reply_message += "USN: uuid:" + device.UniversalUniqueID + "::uupnp:rootdevice\r\n";
+                reply_message += "ST: upnp:rootdevice\r\n";
+                reply_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                reply_message += "\r\n";
+                //IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(reply_message);
+                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, destination, new AsyncCallback(ReplyRootDeviceCallback), udp_send_socket);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception during sending of root device reply packet: " + ex.Message);
+            }
+
+        }
+        /// <summary>
+        /// Callback for the Reply Root Device async send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
+        protected void ReplyRootDeviceCallback(IAsyncResult ar)
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = socket.EndSend(ar);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of root device reply packet: " + ex.Message);
+            }
+        }
+        private void ReplyRootDeviceV2(LocalDevice device, IPEndPoint destination)
+        {
+            try
+            {
+                //string announce_message = "HTTP/1.1 200 OK\r\nCACHE-CONTROL:max-age=" + max_age + "\r\nLOCATION:http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\nNT:urn:" + device.UniqueServiceName + "\r\nUSN:uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\nST: uuid:" + device.UniversalUniqueID + "\r\nServer:NT/5.0 UPnP/1.0\r\n\r\n";
+                string reply_message = "HTTP/1.1 200 OK\r\n";
+                reply_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                reply_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                reply_message += "USN: uuid:" + device.UniversalUniqueID + "\r\n";
+                reply_message += "ST: uuid:" + device.UniversalUniqueID + "\r\n";
+                reply_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                reply_message += "\r\n";
+                //IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(reply_message);
+                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, destination, new AsyncCallback(ReplyRootDeviceV2Callback), udp_send_socket);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception during sending of root device reply v2 packet: " + ex.Message);
+            }
+
+        }
+        /// <summary>
+        /// Callback for the Reply Root Device V2 async send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
+        protected void ReplyRootDeviceV2Callback(IAsyncResult ar)
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = socket.EndSend(ar);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of root device reply v2 packet: " + ex.Message);
+            }
+        }
+        private void ReplyDeviceService(LocalDevice device,SubDevice.Service service, IPEndPoint destination)
+        {
+            try
+            {
+                string reply_message = "HTTP/1.1 200 OK\r\n";
+                reply_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                reply_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                reply_message += "USN: uuid:" + service.ServiceID + "::urn:" + service.ServiceType + "\r\n";
+                reply_message += "ST: urn:" + service.ServiceType + "\r\n";
+                reply_message += "EXT: \r\n";
+                reply_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                reply_message += "\r\n";
+                //IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(reply_message);
+                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, destination, new AsyncCallback(ReplyDeviceServiceCallback), udp_send_socket);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception during sending of device reply packet: " + ex.Message);
+            }
+
+        }
+        /// <summary>
+        /// Callback for the Reply Device Service async send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
+        protected void ReplyDeviceServiceCallback(IAsyncResult ar)
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = socket.EndSend(ar);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of device service reply packet: " + ex.Message);
+            }
+        }
+        public void ReplyDeviceServices(LocalDevice device, IPEndPoint destination)
+        {
+            foreach (SubDevice.Service service in device.RootDevice.Services)
+            {
+                ReplyDeviceService(device, service,destination);
+            }
+        }
+
+        /// <summary>
+        /// Announce a device uuid to other upnp aware applications
+        /// </summary>
+        /// <param name="device">the device to broadcast</param>
+        public void AnnounceDeviceUUID(LocalDevice device, bool is_alive)
+        {
+            try
+            {
+                string nts = "ssdp:alive";
+                if (!is_alive) nts = "ssdp:byebye";
+                string announce_message = "NOTIFY * HTTP/1.1\r\n";
+                announce_message += "HOST: 239.255.255.250:1900\r\n";
+                announce_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                announce_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                announce_message += "NT: uuid:" + device.UniversalUniqueID + "\r\n";
+                announce_message += "USN: uuid:" + device.UniversalUniqueID + "\r\n";
+                announce_message += "NTS: " + nts + "\r\n";
+                announce_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                announce_message += "\r\n";
+
+                IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
                 byte[] send_bytes = System.Text.Encoding.Default.GetBytes(announce_message);
-                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, destination, new AsyncCallback(AnnounceDeviceCallback), udp_send_socket);
+                udp_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_announce_endpoint, new AsyncCallback(AnnounceDeviceCallback), udp_socket);
             }
             catch (Exception ex)
             {
@@ -2624,20 +2997,93 @@ namespace DCPlusPlus
             }
 
         }
+        /// <summary>
+        /// Callback for the Announce Device UUIDasync send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
+        protected void AnnounceDeviceUUIDCallback(IAsyncResult ar)
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = socket.EndSend(ar);
 
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of device announce packet: " + ex.Message);
+            }
+        }
+        /// <summary>
+        /// Announce a root device to other upnp aware applications
+        /// </summary>
+        /// <param name="device">the device to broadcast</param>
+        public void AnnounceRootDevice(LocalDevice device, bool is_alive)
+        {
+            try
+            {
+                string nts = "ssdp:alive";
+                if (!is_alive) nts = "ssdp:byebye";
+                string announce_message = "NOTIFY * HTTP/1.1\r\n";
+                announce_message += "HOST: 239.255.255.250:1900\r\n";
+                announce_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                announce_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                announce_message += "NT: upnp:rootdevice\r\n";
+                announce_message += "USN: uuid:" + device.UniversalUniqueID + "::upnp:rootdevice\r\n";
+                announce_message += "NTS: "+nts+"\r\n";
+                announce_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                announce_message += "\r\n";
+
+                IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
+                byte[] send_bytes = System.Text.Encoding.Default.GetBytes(announce_message);
+                udp_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_announce_endpoint, new AsyncCallback(AnnounceRootDeviceCallback), udp_socket);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception during sending of device announce packet: " + ex.Message);
+            }
+
+        }
+        /// <summary>
+        /// Callback for the Announce Root Device async send
+        /// </summary>
+        /// <param name="ar">Async Result/State</param>
+        protected void AnnounceRootDeviceCallback(IAsyncResult ar)
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            try
+            {
+                int bytes_sent = socket.EndSend(ar);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("exception during sending of device announce packet: " + ex.Message);
+            }
+        }
         /// <summary>
         /// Announce a device to other upnp aware applications
         /// </summary>
         /// <param name="device">the device to broadcast</param>
-        public void AnnounceDevice(LocalDevice device)
+        public void AnnounceDevice(LocalDevice device, bool is_alive)
         {
             try
             {
-                string announce_message = "NOTIFY * HTTP/1.1\r\nHOST:239.255.255.250:1900\r\nCache-Control:max-age=120\r\nLocation:http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\nNT:urn:" + device.UniqueServiceName + "\r\nUSN:uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\nNTS:ssdp:alive\r\nServer:NT/5.0 UPnP/1.0\r\n\r\n\r\n";
+                string nts = "ssdp:alive";
+                if (!is_alive) nts = "ssdp:byebye";
+                string announce_message = "NOTIFY * HTTP/1.1\r\n";
+                announce_message += "HOST: 239.255.255.250:1900\r\n";
+                announce_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                announce_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                announce_message += "NT: urn:" + device.UniqueServiceName + "\r\n";
+                announce_message += "USN: uuid:" + device.UniversalUniqueID + "::urn:" + device.UniqueServiceName + "\r\n";
+                announce_message += "NTS: "+nts+"\r\n";
+                announce_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                announce_message += "\r\n";
 
                 IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
                 byte[] send_bytes = System.Text.Encoding.Default.GetBytes(announce_message);
-                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_announce_endpoint, new AsyncCallback(AnnounceDeviceCallback), udp_send_socket);
+                udp_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_announce_endpoint, new AsyncCallback(AnnounceDeviceCallback), udp_socket);
             }
             catch (Exception ex)
             {
@@ -2666,15 +3112,25 @@ namespace DCPlusPlus
         /// Announce a service to other upnp aware applications
         /// </summary>
         /// <param name="device">the device to broadcast</param>
-        public void AnnounceDeviceService(LocalDevice device,SubDevice.Service service)
+        public void AnnounceDeviceService(LocalDevice device, SubDevice.Service service, bool is_alive)
         {
             try
             {
-                string announce_message = "NOTIFY * HTTP/1.1\r\nHOST:239.255.255.250:1900\r\nCache-Control:max-age=120\r\nLocation:http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/"+device.DeviceID+"/root.xml\r\nNT: urn:"+service.ServiceType+"\r\nUSN:uuid:"+service.ServiceID+"::urn:"+service.ServiceType+"\r\nNTS:ssdp:alive\r\nServer:NT/5.0 UPnP/1.0\r\n\r\n\r\n";
+                string nts = "ssdp:alive";
+                if (!is_alive) nts = "ssdp:byebye";
+                string announce_message = "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\n";
+                announce_message += "CACHE-CONTROL: max-age=" + max_age + "\r\n";
+                announce_message += "LOCATION: http://" + local_device_handler.IP + ":" + local_device_handler.Port + "/device/" + device.DeviceID + "/root.xml\r\n";
+                announce_message += "NT: urn:" + service.ServiceType + "\r\n";
+                //announce_message += "USN: uuid:" + service.ServiceID + "::urn:" + service.ServiceType + "\r\n";
+                announce_message += "USN: uuid:" + device.UniversalUniqueID + "::urn:" + service.ServiceType + "\r\n";
+                announce_message += "NTS: " + nts + "\r\n";
+                announce_message += "Server: NT/5.0 UPnP/1.0\r\n";
+                announce_message += "\r\n";
 
                 IPEndPoint udp_announce_endpoint = new IPEndPoint(IPAddress.Parse(upnp_udp_multicast_address), upnp_udp_port);
                 byte[] send_bytes = System.Text.Encoding.Default.GetBytes(announce_message);
-                udp_send_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_announce_endpoint, new AsyncCallback(AnnounceDeviceServiceCallback), udp_send_socket);
+                udp_socket.BeginSendTo(send_bytes, 0, send_bytes.Length, SocketFlags.None, udp_announce_endpoint, new AsyncCallback(AnnounceDeviceServiceCallback), udp_socket);
             }
             catch (Exception ex)
             {
@@ -2700,24 +3156,61 @@ namespace DCPlusPlus
             }
         }
 
-        public void AnnounceDeviceServices(LocalDevice device)
+        public void AnnounceDeviceServices(LocalDevice device, bool is_alive)
         {
             foreach (SubDevice.Service service in device.RootDevice.Services)
             {
-                AnnounceDeviceService(device, service);
+                int small_interval = 50;
+                AnnounceDeviceService(device, service, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceDeviceService(device, service, is_alive);
             }
+        }
+
+        public void AnnounceDeviceAll(LocalDevice device, bool is_alive)
+        {
+            int packets_num = 1;
+            int small_interval = 50;
+            int big_interval = 50;
+            for (int i = 0; i < packets_num; i++)
+            {
+                AnnounceRootDevice(device, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceRootDevice(device, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceDeviceUUID(device, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceDeviceUUID(device, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceDevice(device, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceDevice(device, is_alive);
+                Thread.Sleep(small_interval);
+                AnnounceDeviceServices(device, is_alive);
+                Thread.Sleep(big_interval);
+            }
+
         }
         /// <summary>
         /// Announce all local devices
         /// </summary>
-        public void AnnounceLocalDevices()
+        public void AnnouncePresenceOfLocalDevices()
+        {
+            //TODO add lock here
+            foreach (LocalDevice device in local_devices)
+            {
+                AnnounceDeviceAll(device, true);
+            }
+        }
+        /// <summary>
+        /// Revokes presence announcement of local devices
+        /// </summary>
+        public void RevokePresenceOfLocalDevices()
         {
             foreach (LocalDevice device in local_devices)
             {
-                AnnounceDevice(device);
-                AnnounceDeviceServices(device);
+                AnnounceDeviceAll(device, false);
             }
-
         }
 
         public void AddLocalDevice(LocalDevice device)
@@ -2725,21 +3218,32 @@ namespace DCPlusPlus
             if (local_devices.Count == 0)
                 StartLocalDeviceHandler();
             local_devices.Add(device);
-            AnnounceDevice(device);
-            AnnounceDeviceServices(device);
-
+            AnnounceDeviceAll(device, true);
         }
 
         public void RemoveLocalDevice(LocalDevice device)
         {
+            AnnounceDeviceAll(device, false);
             local_devices.Remove(device);
             if (local_devices.Count == 0)
                 StopLocalDeviceHandler();
             //TODO let other upnp devices know that this device has gone offline
         }
 
+
+        private LocalDevice GetLocalDeviceByDeviceID(int device_id)
+        {
+            foreach (LocalDevice local in local_devices)
+            {
+                if (local.DeviceID == device_id)
+                    return (local);
+            }
+            return (null);
+        }
+
         private object local_device_handler_started_lock = new object();
         private bool local_device_handler_started = false;
+        private System.Timers.Timer local_device_timer = null;
         /// <summary>
         /// starts the mini web server to handle local device requests
         /// if not already running
@@ -2751,19 +3255,43 @@ namespace DCPlusPlus
                 if (!local_device_handler_started)
                 {
                     local_device_handler_started = true;
+                    //TimerCallback tc = delegate()
+                    /*
+                      local_device_timer = new Timer(delegate(object state)
+                      {
+                          Console.WriteLine("Max Age reached: reannouncing local devices.");
+                          //RevokePresenceOfLocalDevices();
+                          //Thread.Sleep(250);
+                          AnnouncePresenceOfLocalDevices();
+                      });
+                      //local_device_timer.Change((max_age - 5) * 1000, (max_age - 5) * 1000);
+                      local_device_timer.Change(9000, (max_age - 5) * 1000);
+                     */
+                    local_device_timer = new System.Timers.Timer((max_age - 5) * 1000);
+                    local_device_timer.AutoReset = true;
+                    local_device_timer.Elapsed += delegate(object sender, ElapsedEventArgs e)
+                    {
+                        Console.WriteLine("Max Age reached: reannouncing local devices.");
+                        //RevokePresenceOfLocalDevices();
+                        //Thread.Sleep(250);
+                        AnnouncePresenceOfLocalDevices();
+                    };
+                    local_device_timer.Start();
+
                     local_device_handler = new MiniWebServer();
                     local_device_handler.SetupListeningSocket();
                     local_device_handler.RequestReceived += delegate(MiniWebServer request_server, MiniWebServer.Request request)
                         {
-                            Console.WriteLine("Request received: ");
-                            Console.WriteLine("URL: " + request.Url);
-                            Console.WriteLine("Method: " + request.Method);
-                            Console.WriteLine("Version: " + request.Version);
-                            Console.WriteLine("Headers:");
-                            foreach (string key in request.Headers.Keys)
-                            {
-                                Console.WriteLine("[" + key + "]" + ":[" + request.Headers.Get(key) + "]");
-                            }
+                            //Console.WriteLine("Request received: ");
+                            //Console.WriteLine("Client Address: " + request.RequestClient.IP+":"+request.RequestClient.Port);
+                            //Console.WriteLine("URL: " + request.Url);
+                            //Console.WriteLine("Method: " + request.Method);
+                            //Console.WriteLine("Version: " + request.Version);
+                            //Console.WriteLine("Headers:");
+                            //foreach (string key in request.Headers.Keys)
+                            //{
+                            //    Console.WriteLine("[" + key + "]" + ":[" + request.Headers.Get(key) + "]");
+                            //}
 
 
                             int device_id = -1;
@@ -2788,40 +3316,67 @@ namespace DCPlusPlus
                                 Console.WriteLine("error parsing device id: " + ex.Message);
                             }
 
-                            if (device_id != -1)
-                            {
-                                if (device_id >= local_devices.Count)
-                                    request.RequestClient.TellNotFound();
-
-                                string service_id = "";
+                                int service_id = -1;
+                                string service_id_string = "-1";
                                 int service_id_start = request.Url.IndexOf("/service/");
                                 if (service_id_start != -1)
                                 {
-                                    service_id = request.Url.Substring(service_id_start + "/service/".Length);
-                                    int service_id_end = service_id.IndexOf("/");
+                                    service_id_string = request.Url.Substring(service_id_start + "/service/".Length);
+                                    int service_id_end = service_id_string.IndexOf("/");
                                     if (service_id_end != -1)
                                     {
-                                        service_id = service_id.Substring(0, service_id_end);
-                                        Console.WriteLine("service id: " + service_id);
+                                        service_id_string = service_id_string.Substring(0, service_id_end);
+                                        Console.WriteLine("service id string: " + service_id_string);
                                     }
                                 }
 
-                                if (service_id != "")
+                            try
+                            {
+                                service_id = int.Parse(service_id_string);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("error parsing service id: " + ex.Message);
+                            }
+
+
+                            if (device_id != -1)
+                            {
+                                //if (device_id >= local_devices.Count)
+                                //    request.RequestClient.TellNotFound();
+                                LocalDevice device = GetLocalDeviceByDeviceID(device_id);
+                                if (device == null)
                                 {
+                                    Console.WriteLine("Device in url ("+device_id+") not found.");
+                                    request.RequestClient.TellNotFound();
+                                    return;
+                                }
+
+                                if (service_id != -1 )
+                                {
+                                    if (service_id >= device.RootDevice.Services.Count)
+                                    {
+                                        request.RequestClient.TellNotFound();
+                                        return;
+                                    }
                                     if (request.Url.EndsWith("/scpd.xml"))
                                     {
                                         //TODO add correct scpd of service in here
-                                        Console.WriteLine("Clients want the service description xml. -> oops ;-)");
+                                        //Console.WriteLine("Clients want the service description xml. -> oops ;-)");
+                                        SubDevice.Service control_service = device.RootDevice.Services[service_id];
+                                        Console.WriteLine("opened description url of service :" + control_service.ServiceType);
+                                        request.RequestClient.Answer(device.Description(request, service_id), "text/xml");
                                     }
                                     else if (request.Url.EndsWith("/control"))
                                     {
-                                        request.RequestClient.Answer(local_devices[device_id].Control(request, service_id), "text/xml");
+                                        request.RequestClient.Answer(device.Control(request, service_id), "text/xml");
                                     }
                                     else if (request.Url.EndsWith("/event"))
                                     {
-                                        SubDevice.Service control_service = local_devices[device_id].RootDevice.GetServiceByID(service_id);
+                                        SubDevice.Service control_service = device.RootDevice.Services[service_id];
+                                        //SubDevice.Service control_service = local_devices[device_id].RootDevice.GetServiceByID(service_id);
                                         Console.WriteLine("opened event url of service :" + control_service.ServiceType);
-                                        request.RequestClient.Answer(local_devices[device_id].Event(request, service_id), "text/xml");
+                                        request.RequestClient.Answer(device.Event(request, service_id), "text/xml");
                                     }
                                 }
                                 else if (request.Url.EndsWith("/root.xml"))
@@ -2830,30 +3385,32 @@ namespace DCPlusPlus
                                     root_description += "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
                                     root_description += "<root xmlns=\"urn:schemas-upnp-org:device-1-0\">";
                                     root_description += "<specVersion>";
-                                    root_description += "<major>" + local_devices[device_id].SpecVersionMajor + "</major>";
-                                    root_description += "<minor>" + local_devices[device_id].SpecVersionMinor + "</minor>";
+                                    root_description += "<major>" + device.SpecVersionMajor + "</major>";
+                                    root_description += "<minor>" + device.SpecVersionMinor + "</minor>";
                                     root_description += "</specVersion>";
                                     root_description += "<device>";
-                                    root_description += "<deviceType>urn:" + local_devices[device_id].RootDevice.DeviceType + "</deviceType>";
+                                    root_description += "<deviceType>urn:" + device.RootDevice.DeviceType + "</deviceType>";
                                     //root_description += "<INMPR03>1.0</INMPR03>";
-                                    root_description += "<friendlyName>" + local_devices[device_id].RootDevice.FriendlyName + "</friendlyName>";
-                                    root_description += "<manufacturer>" + local_devices[device_id].RootDevice.Manufacturer + "</manufacturer>";
-                                    root_description += "<manufacturerURL>" + local_devices[device_id].RootDevice.ManufacturerUrl + "</manufacturerURL>";
-                                    root_description += "<modelDescription>" + local_devices[device_id].RootDevice.ModelDescription + "</modelDescription>";
-                                    root_description += "<modelName>" + local_devices[device_id].RootDevice.ModelName + "</modelName>";
-                                    root_description += "<modelNumber>" + local_devices[device_id].RootDevice.ModelNumber + "</modelNumber>";
-                                    root_description += "<modelURL>" + local_devices[device_id].RootDevice.ModelUrl + "</modelURL>";
-                                    root_description += "<UDN>uuid:" + local_devices[device_id].RootDevice.UniversalUniqueID + "</UDN>";
+                                    root_description += "<friendlyName>" + device.RootDevice.FriendlyName + "</friendlyName>";
+                                    root_description += "<manufacturer>" + device.RootDevice.Manufacturer + "</manufacturer>";
+                                    root_description += "<manufacturerURL>" + device.RootDevice.ManufacturerUrl + "</manufacturerURL>";
+                                    root_description += "<modelDescription>" + device.RootDevice.ModelDescription + "</modelDescription>";
+                                    root_description += "<modelName>" + device.RootDevice.ModelName + "</modelName>";
+                                    root_description += "<modelNumber>" + device.RootDevice.ModelNumber + "</modelNumber>";
+                                    root_description += "<modelURL>" + device.RootDevice.ModelUrl + "</modelURL>";
+                                    root_description += "<UDN>uuid:" + device.RootDevice.UniversalUniqueID + "</UDN>";
                                     root_description += "<serviceList>";
-                                    foreach (SubDevice.Service service in local_devices[device_id].RootDevice.Services)
+                                    int service_index = 0;
+                                    foreach (SubDevice.Service service in device.RootDevice.Services)
                                     {
                                         root_description += "<service>";
                                         root_description += "<serviceType>urn:" + service.ServiceType + "</serviceType>";
                                         root_description += "<serviceId>urn:" + service.ServiceID + "</serviceId>";
-                                        root_description += "<SCPDURL>/device/" + device_id + "/service/" + service.ServiceID + "/scpd.xml</SCPDURL>";
-                                        root_description += "<controlURL>/device/" + device_id + "/service/" + service.ServiceID + "/control</controlURL>";
-                                        root_description += "<eventSubURL>/device/" + device_id + "/service/" + service.ServiceID + "/event</eventSubURL>";
+                                        root_description += "<SCPDURL>/device/" + device.DeviceID + "/service/" + service_index + "/scpd.xml</SCPDURL>";
+                                        root_description += "<controlURL>/device/" + device.DeviceID + "/service/" + service_index + "/control</controlURL>";
+                                        root_description += "<eventSubURL>/device/" + device.DeviceID + "/service/" + service_index + "/event</eventSubURL>";
                                         root_description += "</service>";
+                                        service_index++;
                                     }
                                     root_description += "</serviceList>";
                                     root_description += "</device>";
@@ -2948,8 +3505,9 @@ namespace DCPlusPlus
                         {
                             udp_send_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                             IPEndPoint udp_send_local_endpoint = new IPEndPoint(IPAddress.Any, 0);
-                            udp_send_socket.Bind(udp_send_local_endpoint);
+                            udp_send_socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, 1);
                             udp_send_socket.Blocking = false;
+                            udp_send_socket.Bind(udp_send_local_endpoint);
                             //EndPoint temp_receive_from_endpoint = (EndPoint)receive_from_endpoint;
                             //EndPoint receive_from_endpoint = (EndPoint)new IPEndPoint(IPAddress.None, 0);
                             AsyncCallback event_receive_from = new AsyncCallback(OnReceiveFrom);
@@ -3264,6 +3822,9 @@ namespace DCPlusPlus
                 foreach (LocalDevice device in local_devices)
                 {
                     ReplyDevice(device, received_from);
+                    ReplyDeviceServices(device, received_from);
+                    ReplyRootDevice(device, received_from);
+                    ReplyRootDeviceV2(device, received_from);
                 }
 
                 //TODO Add response discovery method
@@ -3930,7 +4491,7 @@ namespace DCPlusPlus
 
             bool wait = true;
             //     wait = false;
-            u.AnnounceDevice(mb);
+            u.AnnounceDevice(mb,true);
             Console.WriteLine("Waiting for data");
             DateTime start = DateTime.Now;
             while (wait)
@@ -3970,15 +4531,15 @@ namespace DCPlusPlus
                 {
                     result.TotalMatches = 3;
                     result.AddFolder("Queue", "queue", "0", true, false, 3, "UNKNOWN", -1);
-                    result.AddItem("test item", "pez2001", "http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN", "test item");
-                    result.AddItem("test item 2", "pez2001", "http://www.voyagerproject.org/wp-content/uploads/2006/05/treiwund%20+%20graf%20contra2.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN", "test item");
+                    result.AddItem("test item", "pez2001", "http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN");
+                    result.AddItem("test item 2", "pez2001", "http://www.voyagerproject.org/wp-content/uploads/2006/05/treiwund%20+%20graf%20contra2.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN");
                 }
                 else if (object_id == "queue")
                 {
                     result.TotalMatches = 3;
                     result.AddFolder("Root", "0", "0", true, false, 3, "UNKNOWN", -1);
-                    result.AddItem("test item b", "pez2001", "http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN", "test item");
-                    result.AddItem("test item b 2", "pez2001", "http://www.voyagerproject.org/wp-content/uploads/2006/05/treiwund%20+%20graf%20contra2.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN", "test item");
+                    result.AddItem("test item b", "pez2001", "http://www.voyagerproject.de/stuff/phat_sweet_drill_mix.wav.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN");
+                    result.AddItem("test item b 2", "pez2001", "http://www.voyagerproject.org/wp-content/uploads/2006/05/treiwund%20+%20graf%20contra2.mp3", "audio/mpeg", "test", "0", false, -1, "UNKNOWN");
                 }
                 return (result);
             };

@@ -372,7 +372,7 @@ namespace DCPlusPlus
             for (int i = 0; i < 0x1f; i++)
                 if (i != 0x09 && i != 0x0a && i != 0x0d) hubs_string = hubs_string.Replace((char)i, ' ');//"&#x00"+i+";"
 
-            hubs_string = hubs_string.Replace("&", "&amp;");
+            hubs_string = hubs_string.Replace("&", "&amp;"); // TODO change this ---- no good solution would change &amp; to &amp;amp;
             bool inside_quotes = false;
             for (int i = 0; i < hubs_string.Length; i++)
             {
