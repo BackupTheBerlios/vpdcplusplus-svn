@@ -6,8 +6,7 @@ using System.Net.Sockets;
 using System.Xml;
 using System.IO;
 using System.Timers;
-
-//TODO add timed updating and event handler
+using NUnit.Framework;
 
 
 namespace DCPlusPlus
@@ -16,6 +15,7 @@ namespace DCPlusPlus
     /// a very simple class to aggregate rss feed data
     /// supporting for now only Rss 2.0
     /// </summary>
+    [TestFixture]
     public class Rss
     {
         public class Channel
@@ -331,6 +331,16 @@ namespace DCPlusPlus
 
         /// <summary>
         /// Event handler that gets called
+        /// when the feed not read/found
+        /// </summary>
+        public event FeedNotReadEventHandler FeedNotRead;
+        /// <summary>
+        /// Prototype for the Feed Not Read/Found Event Handler
+        /// </summary>
+        /// <param name="feed">the feed that was not read/found</param>
+        public delegate void FeedNotReadEventHandler(Rss feed);
+        /// <summary>
+        /// Event handler that gets called
         /// when the feed was updated
         /// </summary>
         public event FeedUpdatedEventHandler FeedUpdated;
@@ -339,6 +349,67 @@ namespace DCPlusPlus
         /// </summary>
         /// <param name="feed">the feed that was updated</param>
         public delegate void FeedUpdatedEventHandler(Rss feed);
+
+        /// <summary>
+        /// Event handler that gets called
+        /// when a channel in the feed was updated
+        /// </summary>
+        public event ChannelUpdatedEventHandler ChannelUpdated;
+        /// <summary>
+        /// Prototype for the Channel Updated Event Handler
+        /// </summary>
+        /// <param name="feed">the feed that was updated</param>
+        /// <param name="channel">the channel that was updated</param>
+        public delegate void ChannelUpdatedEventHandler(Rss feed, Channel channel);
+        /// <summary>
+        /// Event handler that gets called
+        /// when a channel in the feed was added
+        /// </summary>
+        public event ChannelAddedEventHandler ChannelAdded;
+        /// <summary>
+        /// Prototype for the Channel Added Event Handler
+        /// </summary>
+        /// <param name="feed">the feed the channel belongs to</param>
+        /// <param name="channel">the channel that was added</param>
+        public delegate void ChannelAddedEventHandler(Rss feed, Channel channel);
+        /// <summary>
+        /// Event handler that gets called
+        /// when an item was added to the feed 
+        /// </summary>
+        public event ItemAddedEventHandler ItemAdded;
+        /// <summary>
+        /// Prototype for the Item Added Event Handler
+        /// </summary>
+        /// <param name="feed">the feed the item belongs to</param>
+        /// <param name="channel">the channel the item belongs to</param>
+        /// <param name="item">the item that was added</param>
+        public delegate void ItemAddedEventHandler(Rss feed, Channel channel,Channel.Item item);
+        private System.Threading.Thread reading_thread = null;
+        public void StopReading()
+        {
+            if (reading_thread != null)
+            {
+                reading_thread.Abort();
+                reading_thread = null;
+            }
+        }
+
+        public void CleanUp()
+        {
+            StopReading();
+            FeedNotRead = null;
+            FeedUpdated = null;
+            ChannelUpdated = null;
+            ChannelAdded = null;
+            ItemAdded = null;
+            if (update_timer != null)
+            {
+                update_timer.Stop();
+                update_timer.Dispose();
+                update_timer.Close();
+            }
+            Console.WriteLine("Cleaned up Rss Feed");
+        }
 
         public void FireFeedUpdated()
         {
@@ -357,6 +428,40 @@ namespace DCPlusPlus
                 return (busy);
             }
         }
+        private bool feed_updated = false;
+
+        private int retries = 0;
+
+        public int Retries
+        {
+            get { return retries; }
+            //set { retries = value; }
+        }
+
+        private int max_retries = 3;
+
+        public int MaxRetries
+        {
+            get { return max_retries; }
+            set { max_retries = value; }
+        }
+
+
+        private void CheckForRetry()
+        {
+            if (retries++ < max_retries)
+            {
+                FetchFeed();
+            }
+            else
+            {
+                if (FeedNotRead != null)
+                    FeedNotRead(this);
+            }
+
+        }
+
+
         /// <summary>
         /// Get the feed channel information
         /// </summary>
@@ -366,53 +471,79 @@ namespace DCPlusPlus
             //interpret xml returned
             //and set values accordingly
             //find method urls of the router services
-            Console.WriteLine("Fetching feed.");
-
-
             if (string.IsNullOrEmpty(url))
-            {
                 return; //a location is really all we need here,but if its not there just return
-            }
             if (!busy)
             {
+                feed_updated = false;
+                //Console.WriteLine("Fetching feed.");
                 wc = new WebClient();
                 if (wc.IsBusy)
                     Console.WriteLine("Damn the client is already busy.. wtf ?");
                 wc.DownloadDataCompleted += delegate(object sender, DownloadDataCompletedEventArgs e)
                 {
-                    Console.WriteLine("download completed");
+                    //Console.WriteLine("download completed");
                     try
                     {
                         if (e.Cancelled)
                         {
+                            CheckForRetry();
                             return;
                         }
-                        if (e.Result.Length <= 0)
-                        {
-                            return;
-                        }
+                        if (e.Result == null || e.Result.Length <= 0)
+                        //if (e.Result.Length <= 0)
+                            {
+                                CheckForRetry();
+                                return;
+                            }
                         string page_string = "";
                         page_string = System.Text.Encoding.Default.GetString(e.Result);
                         wc.Dispose();
-                        ReadFeedFromXml(page_string);
-                        Console.WriteLine("Feed read.");
+                        if(page_string=="")
+                        {
+                            CheckForRetry();
+                            return;
+                        }
+                        reading_thread = new System.Threading.Thread(delegate()
+                        {
+                            if (ReadFeedFromXml(page_string))
+                            {
+                                //Console.WriteLine("Feed read.");
+                                busy = false;
+                                retries = 0;
+                                if (FeedUpdated != null && feed_updated)
+                                    FeedUpdated(this);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Feed not read.");
+                                busy = false;
+                                CheckForRetry();
+                            }
+                            reading_thread = null;
+                        });
+                        reading_thread.Start();
+
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine("Exception after download: " + ex.Message);
+                        CheckForRetry();
                         return;
                     }
                 };
                 busy = true;
                 try
                 {
-                    Console.WriteLine("starting download of: " + url);
+                    //Console.WriteLine("starting download of: " + url);
                     wc.DownloadDataAsync(new Uri(url));
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine("Exception occured during download: " + ex.Message);
                     busy = false;
+                    CheckForRetry();
+                    return;
                 }
 
                 if (update_timer != null)
@@ -432,37 +563,23 @@ namespace DCPlusPlus
 
 
         }
+
         public void FetchFeed(string rss_url)
         {
             url = rss_url;
             FetchFeed();
         }
 
-        private void ReadFeedFromXml(string xml)
+        private bool ReadFeedFromXml(string xml)
         {
-            Console.WriteLine("getting channel");
+            //Console.WriteLine("getting channel");
 
-            //string tmp = xml;
-         /*   for(int i =0; i< xml.Length;i++)
-            {
-                if (xml[i] != 0x09 && xml[i] != 0x0a && xml[i] != 0x0d &&
-                    (
-                    (xml[i] < 0x020) || (xml[i] > 0x07e)//0x0d7ff) //||
-                    //(xml[i] < 0x0e000) || (xml[i] > 0x0fffd) 
-                    )
-                    //|| ((xml[i] < 0x010000) || (xml[i] > 0x010ffff))
-                    )
-                    xml = xml.Remove(i,1);
-                
-            }
-            */
-            //Console.WriteLine("xml: "+xml);
-            
-            //xml = xml.Replace("&amp;", "$$$_amp;_$$$");
-            //xml = xml.Replace("&", "&amp;");
-            //xml = xml.Replace( "$$$_amp;_$$$","&amp;");
+            //some simple validity check
 
-
+            if (xml.IndexOf("rss", StringComparison.CurrentCultureIgnoreCase) == -1)
+                return (false);
+            if (xml.IndexOf("channel", StringComparison.CurrentCultureIgnoreCase) == -1)
+                return (false);
 
             XmlDocument doc = new XmlDocument();
             try
@@ -485,9 +602,9 @@ namespace DCPlusPlus
             catch (Exception ex)
             {
                 Console.WriteLine("error reading xml: " + ex.Message);
+                return (false);
             }
-            if (FeedUpdated != null)
-                FeedUpdated(this);
+            return (true);
         }
 
         private void ReadRss(XmlNode node)
@@ -515,7 +632,7 @@ namespace DCPlusPlus
             {
                 foreach (XmlNode child in node.ChildNodes)
                 {
-                    if (child.Name.Equals("title", StringComparison.CurrentCultureIgnoreCase)) channel.Title = child.InnerText;
+                    if (child.Name.Equals("title", StringComparison.CurrentCultureIgnoreCase)) channel.Title =child.InnerText;
                     if (child.Name.Equals("link", StringComparison.CurrentCultureIgnoreCase)) channel.Link = child.InnerText;
                     if (child.Name.Equals("description", StringComparison.CurrentCultureIgnoreCase)) channel.Description = child.InnerText;
                     if (child.Name.Equals("language", StringComparison.CurrentCultureIgnoreCase)) channel.Language = child.InnerText;
@@ -547,7 +664,171 @@ namespace DCPlusPlus
                     if (child.Name.Equals("item", StringComparison.CurrentCultureIgnoreCase)) ReadItem(child, channel);
                 }
             }
-            channels.Add(channel);
+
+            Channel found = ChannelExists(channel);
+            if (found != null)  //check if the channel is already in our list
+            {
+                //if updating an already existing channel
+                //check each item seperately and compare if possible
+                //by guid (if no guid exists check by item fields)
+                //add unique new items to the existing channel
+                //using insert(0);to put it in front
+                //fire new_item and the channel_updated event
+                //
+                if (ChannelHasGuids(found) && ChannelHasGuids(channel))
+                {
+                    //easy money we can compare each item by its guid
+                    bool channel_updated = false;
+                    foreach (Channel.Item item in channel.Items)
+                    {
+                        //we now compare each item of channel against the found channels items
+                        //by guid
+                        if (ChannelItemExistsByGuid(found, item.GUID))
+                        {
+                            //this item already exist no adding needed
+                            //Console.WriteLine("the channel already has an item with that guid");
+
+                        }
+                        else
+                        {
+                            //this is a new item , add and set feed_updated/channel_updated to true
+                            channel_updated = true;
+                            feed_updated = true;
+                            found.Items.Insert(0, item);
+                            if (ItemAdded != null)
+                                ItemAdded(this, found, item);
+                        }
+
+                    }
+                    if (ChannelUpdated != null && channel_updated)
+                        ChannelUpdated(this, found);
+                }
+                else
+                {
+                    //damn have to spend some money to compare by every single property of the item
+                    bool channel_updated = false;
+                    foreach (Channel.Item item in channel.Items)
+                    {
+                        //we now compare each item of channel against the found channels items
+                        //by guid
+                        if (ChannelItemExistsByEtc(found, item))
+                        {
+                            //this item already exist no adding needed
+                            //Console.WriteLine("the channel already has an item alike");
+                        }
+                        else
+                        {
+                            //this is a new item , add and set feed_updated/channel_updated to true
+                            channel_updated = true;
+                            feed_updated = true;
+                            found.Items.Insert(0, item);
+                            //Console.WriteLine("Adding new item: "+item.Title);
+                            if (ItemAdded != null)
+                                ItemAdded(this, found, item);
+                        }
+
+                    }
+                    if (ChannelUpdated != null && channel_updated)
+                        ChannelUpdated(this, found);
+
+                    channel.Items.Clear();
+                    channel = null;
+                }
+
+
+            }
+            else
+            {
+                //if new just add and fire the new_channel event
+                feed_updated = true;
+                channels.Add(channel);
+                if (ChannelAdded != null)
+                    ChannelAdded(this, channel);
+            }
+            
+
+
+        }
+        /// <summary>
+        /// Checks if a channel has an item like the item specified
+        /// </summary>
+        /// <param name="channel">the channel which items to check</param>
+        /// <param name="item">the item to compare with</param>
+        /// <returns>TRUE if the channel has an item alike the item specified</returns>
+        private bool ChannelItemExistsByEtc(Channel channel,Channel.Item item)
+        {
+            //TODO change to ignore cases
+            foreach (Channel.Item i in channel.Items)
+            {
+                if ( (i.Title == item.Title) 
+                    //&& (i.PubDate == item.PubDate) 
+                    && (i.Link == item.Link) 
+                    && (i.Description == item.Description) 
+                    && (i.Comments == item.Comments) 
+                    && (i.Author == item.Author))
+                    return (true);
+            }
+            return (false);
+
+        }
+
+        /// <summary>
+        /// Checks if a channel has an item with the guid specified
+        /// </summary>
+        /// <param name="channel">the channel which items to check</param>
+        /// <param name="guid">the guid to compare to</param>
+        /// <returns>TRUE if the channel has an item with the specified guid</returns>
+        private bool ChannelItemExistsByGuid(Channel channel, string guid)
+        {
+            //TODO change to ignore cases
+            foreach (Channel.Item item in channel.Items)
+            {
+                if (item.GUID == guid)
+                    return (true);
+            }
+            return (false);
+        }
+        /// <summary>
+        /// Checks if a channel has item guids to make differentiation possible
+        /// (all items need to have a guid or else this check fails)
+        /// </summary>
+        /// <param name="channel">the channel to check</param>
+        /// <returns>TRUE if the channel has items with guids</returns>
+        private bool ChannelHasGuids(Channel channel)
+        {
+            bool item_has_no_guid = false;
+            foreach (Channel.Item item in channel.Items)
+            {
+                if (item.GUID == "")
+                    item_has_no_guid = true;
+            }
+            return (!item_has_no_guid);
+            //return (false);
+        }
+
+        /// <summary>
+        /// Checks if a channel already exists in the channels list
+        /// </summary>
+        /// <param name="channel">the channel to check for</param>
+        /// <returns>returns the channel that already exists , or NULL if the channel is unique</returns>
+        private Channel ChannelExists(Channel channel)
+        {
+            //TODO change to ignore cases
+            //comparing by title ,etc
+            foreach (Channel c in channels)
+            {
+                if ((c.Title == channel.Title)
+                    && (c.Copyright == channel.Copyright)
+                    && (c.Description == channel.Description)
+                    && (c.Docs == channel.Docs)
+                    && (c.Generator == channel.Generator)
+                    && (c.Language == channel.Language)
+                    && (c.Link == channel.Link)
+                    && (c.ManagingEditor == channel.ManagingEditor)
+                    && (c.WebMaster == channel.WebMaster))
+                    return (c);
+            }
+            return (null);
         }
 
         private void ReadRssImage(XmlNode node,Channel channel)
@@ -585,7 +866,7 @@ namespace DCPlusPlus
                 {
                     if (child.Name.Equals("title", StringComparison.CurrentCultureIgnoreCase)) item.Title = child.InnerText;
                     if (child.Name.Equals("link", StringComparison.CurrentCultureIgnoreCase)) item.Link = child.InnerText;
-                    if (child.Name.Equals("description", StringComparison.CurrentCultureIgnoreCase)) item.Description = child.InnerText;
+                    if (child.Name.Equals("description", StringComparison.CurrentCultureIgnoreCase)) item.Description = XmlStrings.FromXmlString(child.InnerText);
                     if (child.Name.Equals("author", StringComparison.CurrentCultureIgnoreCase)) item.Author = child.InnerText;
                     if (child.Name.Equals("category", StringComparison.CurrentCultureIgnoreCase)) item.Categories.Add(child.InnerText);
                     if (child.Name.Equals("comments", StringComparison.CurrentCultureIgnoreCase)) item.Comments = child.InnerText;
@@ -602,7 +883,12 @@ namespace DCPlusPlus
                                     UrlRelocationCheck urc = new UrlRelocationCheck(enclosure.Url);
                                     urc.FoundRelocatedUrl += delegate(UrlRelocationCheck found_urc)
                                     {
-                                        enclosure.Url = urc.RelocatedUrl;
+                                        enclosure.Url = found_urc.RelocatedUrl;
+
+                                        //found_urc.Url = found_urc.RelocatedUrl;
+                                        //found_urc.MimeType = "";
+                                        //found_urc.RelocatedUrl = "";
+                                        //found_urc.CheckUrl();
                                     };
                                     urc.CheckUrl();
                                 }
@@ -669,5 +955,79 @@ namespace DCPlusPlus
         {
             url = "";
         }
+
+        #region Unit Testing
+        /// <summary>
+        /// Test to see if fetching rss feeds works
+        /// </summary>
+        [Test]
+        public void TestFetchingRssFeed()
+        {
+            Console.WriteLine("Test to check if fetching a rss feed works.");
+            bool wait = true;
+            Rss feed = new Rss("http://www.voyagerproject.org/feed/");
+            feed.FeedUpdated += delegate(Rss updated_feed)
+            {
+                Console.WriteLine("");
+                Console.WriteLine("Rss Feed fetched (" + updated_feed.Channels.Count + ")");
+                wait = false;
+            };
+            feed.FetchFeed();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 35))
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Operation took too long");
+                    wait = false;
+                    Assert.Fail("Operation took too long");
+                }
+                Console.Write(".");
+                System.Threading.Thread.Sleep(250);
+            }
+            Assert.IsTrue(feed.Channels.Count > 0, "no channels found.");
+            Console.WriteLine("Fetching Rss Feed Test successful.");
+        }
+        /// <summary>
+        /// Test to see if fetching rss feeds works
+        /// </summary>
+        [Test]
+        public void TestUpdatingRssFeed()
+        {
+            Console.WriteLine("Test to check if updating a rss feed works.");
+            bool wait = true;
+            int items_num = 0;
+            int updates = 0;
+            Rss feed = new Rss("http://www.voyagerproject.org/feed/");
+            feed.FeedUpdated += delegate(Rss updated_feed)
+            {
+                updates++;
+                Console.WriteLine("");
+                Console.WriteLine("Rss Feed fetched (" + updated_feed.Channels.Count + ")");
+                items_num = updated_feed.Channels[0].Items.Count;
+                updated_feed.FetchFeed();
+                //wait = false;
+            };
+            feed.FetchFeed();
+            Console.WriteLine("Waiting for data");
+            DateTime start = DateTime.Now;
+            while (wait)
+            {
+                if (DateTime.Now - start > new TimeSpan(0, 0, 2))
+                {
+                    Assert.IsTrue(feed.Channels.Count > 0, "no channels found.");
+                    Assert.IsTrue(feed.Channels.Count == 1, "too many channels found.");
+                    Assert.IsTrue(feed.Channels[0].Items.Count == items_num, "items num changed.");
+                    wait = false;
+                }
+                Assert.IsTrue(updates <= 1, "too many updates.");
+                Console.Write(".");
+                System.Threading.Thread.Sleep(250);
+            }
+            Console.WriteLine("Updating Rss Feed Test successful.");
+        }
+        #endregion
     }
 }

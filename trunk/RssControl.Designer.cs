@@ -28,14 +28,28 @@ namespace DCPlusPlus
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(RssControl));
+            this.imageList1 = new System.Windows.Forms.ImageList(this.components);
             this.ItemsView = new System.Windows.Forms.ListView();
             this.columnHeader1 = new System.Windows.Forms.ColumnHeader();
             this.SuspendLayout();
+            // 
+            // imageList1
+            // 
+            this.imageList1.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("imageList1.ImageStream")));
+            this.imageList1.TransparentColor = System.Drawing.Color.Transparent;
+            this.imageList1.Images.SetKeyName(0, "ledblue.png");
+            this.imageList1.Images.SetKeyName(1, "ball_small16.png");
             // 
             // ItemsView
             // 
             this.ItemsView.Activation = System.Windows.Forms.ItemActivation.OneClick;
             this.ItemsView.Alignment = System.Windows.Forms.ListViewAlignment.Left;
+            this.ItemsView.AutoArrange = false;
+            this.ItemsView.BackColor = System.Drawing.Color.White;
+            this.ItemsView.BackgroundImage = global::DCPlusPlus.Properties.Resources.media_server_rss_bg2;
+            this.ItemsView.BackgroundImageTiled = true;
             this.ItemsView.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1});
             this.ItemsView.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -50,9 +64,11 @@ namespace DCPlusPlus
             this.ItemsView.ShowGroups = false;
             this.ItemsView.ShowItemToolTips = true;
             this.ItemsView.Size = new System.Drawing.Size(150, 150);
+            this.ItemsView.SmallImageList = this.imageList1;
+            this.ItemsView.StateImageList = this.imageList1;
             this.ItemsView.TabIndex = 0;
             this.ItemsView.UseCompatibleStateImageBehavior = false;
-            this.ItemsView.View = System.Windows.Forms.View.Details;
+            this.ItemsView.View = System.Windows.Forms.View.SmallIcon;
             this.ItemsView.DoubleClick += new System.EventHandler(this.ItemsView_DoubleClick);
             this.ItemsView.Resize += new System.EventHandler(this.ItemsView_Resize);
             this.ItemsView.SelectedIndexChanged += new System.EventHandler(this.ItemsView_SelectedIndexChanged);
@@ -60,7 +76,7 @@ namespace DCPlusPlus
             // 
             // columnHeader1
             // 
-            this.columnHeader1.Text = "Title";
+            this.columnHeader1.Text = "";
             this.columnHeader1.Width = 146;
             // 
             // RssControl
@@ -79,5 +95,6 @@ namespace DCPlusPlus
 
         private System.Windows.Forms.ListView ItemsView;
         private System.Windows.Forms.ColumnHeader columnHeader1;
+        private System.Windows.Forms.ImageList imageList1;
     }
 }

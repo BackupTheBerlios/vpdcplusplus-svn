@@ -720,93 +720,6 @@ namespace DCPlusPlus
             public List<DirectoryContents> directories = new List<DirectoryContents>();
         }
         /// <summary>
-        /// Convert a string to a valid xml string
-        /// (enquoting of invalid characters)
-        /// </summary>
-        /// <param name="org">some string to be converted to a xml string</param>
-        /// <returns>a quoted xml string</returns>
-        private static string ToXmlString(string org)
-        {
-            if (String.IsNullOrEmpty(org)) return ("");
-
-            string tmp = new string(org.ToCharArray());
-            //System.Console.WriteLine("ToXml on string content: '" + tmp+"'");
-            int p = 0;
-            //while ((p = tmp.IndexOf("&", p)) != -1) { tmp = tmp.Replace("&", "&amp;"); if(p<tmp.Length)p++; }
-            List<int> amps = new List<int>();
-            while ((p = tmp.IndexOf("&", p)) != -1)
-            {
-                //System.Console.WriteLine("ToXml add amp: '" + p + "'");
-                amps.Add(p);
-                if (p < tmp.Length - 1) p++;
-                else break;
-
-
-            }
-            //System.Console.WriteLine("ToXml amp count: '" + amps.Count + "'");
-            for (int i = 0; i < amps.Count; i++)
-            {
-                //System.Console.WriteLine("ToXml amps["+i+"]: '" + amps[i] + "' length of tmp:"+tmp.Length);
-                tmp = tmp.Remove(amps[i] + (i * 4), 1);
-                tmp = tmp.Insert(amps[i] + (i * 4), "&amp;");
-                //System.Console.WriteLine("ToXml tmp after amp conversion: '" + tmp + "'");
-            }
-
-
-            while (tmp.IndexOf("<") != -1) tmp = tmp.Replace("<", "&lt;");
-            while (tmp.IndexOf(">") != -1) tmp = tmp.Replace(">", "&gt;");
-            while (tmp.IndexOf("\"") != -1) tmp = tmp.Replace("\"", "&quot;");
-            while (tmp.IndexOf("'") != -1) tmp = tmp.Replace("'", "&apos;");
-            for (int i = 0; i < 32; i++)
-            {
-                char c = Convert.ToChar(i);
-                if (i != 0x09 && i != 0x0a && i != 0x0d)
-                {
-                    int pos = -1;
-                    while ((pos = tmp.IndexOf(c)) != -1)
-                    {
-                        tmp = tmp.Remove(pos, 1);
-                        tmp = tmp.Insert(pos, "&#" + Convert.ToString(c, 16) + ";");
-                    }
-                }
-            }
-            //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
-            return (tmp);
-        }
-        /// <summary>
-        /// Convert a xml string back to a normal string
-        /// (unquoting of invalid characters)
-        /// </summary>
-        /// <param name="org">xml string</param>
-        /// <returns>an unquoted string</returns>
-        private static string FromXmlString(string org)
-        {
-            if (org == null) return ("");
-            string tmp = new string(org.ToCharArray());
-            //System.Console.WriteLine("Stripping Linefeeds on string content: '" + tmp+"'");
-            while (tmp.IndexOf("&amp;") != -1) tmp = tmp.Replace("&amp;", "&");
-            while (tmp.IndexOf("&lt;") != -1) tmp = tmp.Replace("&lt;", "<");
-            while (tmp.IndexOf("&gt;") != -1) tmp = tmp.Replace("&gt;", ">");
-            while (tmp.IndexOf("&quot;") != -1) tmp = tmp.Replace("&quot;", "\"");
-            while (tmp.IndexOf("&apos;") != -1) tmp = tmp.Replace("&apos;", "'");
-            for (int i = 0; i < 32; i++)
-            {
-                char c = Convert.ToChar(i);
-                if (i != 0x09 && i != 0x0a && i != 0x0d)
-                {
-                    int pos = -1;
-                    string s = "&#" + Convert.ToString(c, 16) + ";";
-                    while ((pos = tmp.IndexOf(s)) != -1)
-                    {
-                        tmp = tmp.Remove(pos, s.Length);
-                        tmp = tmp.Insert(pos, c.ToString());
-                    }
-                }
-            }
-            //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
-            return (tmp);
-        }
-        /// <summary>
         /// Find an existing directory in the directory contents tree
         /// </summary>
         /// <param name="dc">the starting point of search</param>
@@ -887,7 +800,7 @@ namespace DCPlusPlus
         {//recursively get all contents in one string
             string dir_string = "";
             if (dc.directory_name != "")
-                dir_string += "<Directory Name=\"" + ToXmlString(dc.directory_name) + "\">\n";
+                dir_string += "<Directory Name=\"" + XmlStrings.ToXmlString(dc.directory_name) + "\">\n";
             foreach (DirectoryContents dir in dc.directories)
             {
                 dir_string += GetDirectoryContentsString(dir);
@@ -896,7 +809,7 @@ namespace DCPlusPlus
             {
                 foreach (SharingEntry file in dc.files)
                 {
-                    dir_string += "<File Name=\"" + ToXmlString(Path.GetFileName(file.Filename)) + "\" Size=\"" + file.Filesize + "\" TTH=\"" + file.TTH + "\"/>\n";
+                    dir_string += "<File Name=\"" + XmlStrings.ToXmlString(Path.GetFileName(file.Filename)) + "\" Size=\"" + file.Filesize + "\" TTH=\"" + file.TTH + "\"/>\n";
                 }
                 dir_string += "</Directory>\n";
             }

@@ -583,6 +583,19 @@ namespace DCPlusPlus
                 set
                 {
                     universal_unique_id = value;
+                    //update all uuids
+                    if (root_device != null)
+                    {
+                        root_device.UniversalUniqueID = value;
+                        foreach (SubDevice sub in root_device.Devices)
+                        {
+                            sub.UniversalUniqueID = value;
+                            /*foreach (SubDevice.Service sub_service in sub.Services)
+                            {
+                                sub_service.
+                            }*/
+                        }
+                    }
                 }
             }
 
@@ -933,6 +946,16 @@ namespace DCPlusPlus
                 set { device_id = value; }
             }
 
+            private DateTime last_announcement_time = DateTime.MinValue;
+
+            public DateTime LastAnnouncementTime
+            {
+                get { return last_announcement_time; }
+                set { last_announcement_time = value; }
+            }
+
+
+
             public abstract string Control(MiniWebServer.Request request, int service_index);
             public abstract string Event(MiniWebServer.Request request, int service_index); //TODO maybe change string service_id to SubDevice.Service service
             public abstract string Description(MiniWebServer.Request request, int service_index);
@@ -1200,7 +1223,7 @@ namespace DCPlusPlus
         /// <summary>
         /// this implements a media browser 
         /// </summary>
-        public class MediaBrowser : LocalDevice // TODO change to LocalDevice subclass of Device
+        public class MediaBrowser : LocalDevice
         {
             /* TODO 
              * use upnp class to handle its presence announcing and updating of cache infos
@@ -1346,95 +1369,6 @@ namespace DCPlusPlus
 
             }
 
-            /// <summary>
-            /// Convert a string to a valid xml string
-            /// (enquoting of invalid characters)
-            /// </summary>
-            /// <param name="org">some string to be converted to a xml string</param>
-            /// <returns>a quoted xml string</returns>
-            private static string ToXmlString(string org)
-            {
-                if (String.IsNullOrEmpty(org)) return ("");
-
-                string tmp = new string(org.ToCharArray());
-                //System.Console.WriteLine("ToXml on string content: '" + tmp+"'");
-                int p = 0;
-                //while ((p = tmp.IndexOf("&", p)) != -1) { tmp = tmp.Replace("&", "&amp;"); if(p<tmp.Length)p++; }
-                List<int> amps = new List<int>();
-                while ((p = tmp.IndexOf("&", p)) != -1)
-                {
-                    //System.Console.WriteLine("ToXml add amp: '" + p + "'");
-                    amps.Add(p);
-                    if (p < tmp.Length - 1) p++;
-                    else break;
-
-
-                }
-                //System.Console.WriteLine("ToXml amp count: '" + amps.Count + "'");
-                for (int i = 0; i < amps.Count; i++)
-                {
-                    //System.Console.WriteLine("ToXml amps["+i+"]: '" + amps[i] + "' length of tmp:"+tmp.Length);
-                    tmp = tmp.Remove(amps[i] + (i * 4), 1);
-                    tmp = tmp.Insert(amps[i] + (i * 4), "&amp;");
-                    //System.Console.WriteLine("ToXml tmp after amp conversion: '" + tmp + "'");
-                }
-
-
-                while (tmp.IndexOf("<") != -1) tmp = tmp.Replace("<", "&lt;");
-                while (tmp.IndexOf(">") != -1) tmp = tmp.Replace(">", "&gt;");
-                while (tmp.IndexOf("\"") != -1) tmp = tmp.Replace("\"", "&quot;");
-                while (tmp.IndexOf("'") != -1) tmp = tmp.Replace("'", "&apos;");
-                for (int i = 0; i < 32; i++)
-                {
-                    char c = Convert.ToChar(i);
-                    if (i != 0x09 && i != 0x0a && i != 0x0d)
-                    {
-                        int pos = -1;
-                        while ((pos = tmp.IndexOf(c)) != -1)
-                        {
-                            tmp = tmp.Remove(pos, 1);
-                            tmp = tmp.Insert(pos, "&#" + Convert.ToString(c, 16) + ";");
-                        }
-                    }
-                }
-                //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
-                return (tmp);
-            }
-            /// <summary>
-            /// Convert a xml string back to a normal string
-            /// (unquoting of invalid characters)
-            /// </summary>
-            /// <param name="org">xml string</param>
-            /// <returns>an unquoted string</returns>
-            private static string FromXmlString(string org)
-            {
-                if (org == null) return ("");
-                string tmp = new string(org.ToCharArray());
-                //System.Console.WriteLine("Stripping Linefeeds on string content: '" + tmp+"'");
-                while (tmp.IndexOf("&amp;") != -1) tmp = tmp.Replace("&amp;", "&");
-                while (tmp.IndexOf("&lt;") != -1) tmp = tmp.Replace("&lt;", "<");
-                while (tmp.IndexOf("&gt;") != -1) tmp = tmp.Replace("&gt;", ">");
-                while (tmp.IndexOf("&quot;") != -1) tmp = tmp.Replace("&quot;", "\"");
-                while (tmp.IndexOf("&apos;") != -1) tmp = tmp.Replace("&apos;", "'");
-                for (int i = 0; i < 32; i++)
-                {
-                    char c = Convert.ToChar(i);
-                    if (i != 0x09 && i != 0x0a && i != 0x0d)
-                    {
-                        int pos = -1;
-                        string s = "&#" + Convert.ToString(c, 16) + ";";
-                        while ((pos = tmp.IndexOf(s)) != -1)
-                        {
-                            tmp = tmp.Remove(pos, s.Length);
-                            tmp = tmp.Insert(pos, c.ToString());
-                        }
-                    }
-                }
-                //System.Console.WriteLine("after multiple newline remove check: '" + tmp + "'");
-                return (tmp);
-            }
-
-
             public override string Event(MiniWebServer.Request request, int service_index)
             {
                 if (service_index >= root_device.Services.Count)
@@ -1449,9 +1383,9 @@ namespace DCPlusPlus
                 if (service_index >= root_device.Services.Count)
                     return ("");//TODO put a real error message in here 
                 SubDevice.Service control_service = root_device.Services[service_index];
-                Console.WriteLine("opened control url of service :" + control_service.ServiceType);
+                //Console.WriteLine("opened control url of service :" + control_service.ServiceType);
                 //Console.WriteLine("body:" + request.Body);
-                Console.WriteLine("soap action:" + request.Headers.Get("SOAPACTION"));
+                //Console.WriteLine("soap action:" + request.Headers.Get("SOAPACTION"));
                 char[] trims = { '"'};
                 if (request.Headers.Get("SOAPACTION").Trim().Trim(trims) == "urn:schemas-upnp-org:service:ContentDirectory:1#Browse")
                 {
@@ -1497,7 +1431,7 @@ namespace DCPlusPlus
                             didl = result.Didl;
                             total_matches = result.TotalMatches;
                         }
-                        didl = ToXmlString(didl);
+                        didl = XmlStrings.ToXmlString(didl);
                         number_returned = result.NumberReturned;
                         update_id = result.UpdateID;
                     }
@@ -1576,7 +1510,9 @@ namespace DCPlusPlus
                 spec_version_major = 1;
                 spec_version_minor = 0;
                 unique_service_name = "schemas-upnp-org:device:MediaServer:1";
-                universal_unique_id = "00000000-FFEE-0000-0000-00000FF0000" + device_id;//TODO change to FormatStringVersion to add zeros in front of device_id if less than 1000
+                //universal_unique_id = "00000000-FFEE-0000-0000-00000FF0000" + device_id;//TODO change to FormatStringVersion to add zeros in front of device_id if less than 1000
+                universal_unique_id = System.Guid.NewGuid().ToString();
+                
                 root_device = new SubDevice();
                 root_device.DeviceType = "schemas-upnp-org:device:MediaServer:1";//urn:
                 root_device.FriendlyName = "vpMediaServer";
@@ -1587,7 +1523,15 @@ namespace DCPlusPlus
                 root_device.ModelNumber = "0.1";
                 root_device.ModelUrl = "http://www.voyagerproject.org";
                 root_device.PresentationUrl = "http://www.voyagerproject.org";
-                root_device.UniversalUniqueID = "00000000-FFEE-0000-0000-00000FF0000" + device_id;//uuid:
+
+                //TODO now generate a uuid based on ip and port and an internal counter
+                //to make each and every instance of the media browser unique
+                //or just a random number :-)
+                //Random rnd = new Random();
+                //int i = rnd.Next(65535);
+                //string si = Convert.ToString(i, 16);
+                root_device.UniversalUniqueID = universal_unique_id;
+                //root_device.UniversalUniqueID = "00000000-FFEE-"+si+"-0000-00000FF0000" + device_id;//uuid:
                 SubDevice.Service connection_manager = new SubDevice.Service();
                 SubDevice.Service content_directory = new SubDevice.Service();
                 connection_manager.ServiceType = "schemas-upnp-org:service:ConnectionManager:1";
@@ -2734,7 +2678,7 @@ namespace DCPlusPlus
         /// <param name="device">the device that was discovered</param>
         public delegate void DeviceDiscoveredEventHandler(Device device);
 
-        private int max_age=90;
+        private int max_age = 3600;//360;
 
         public int MaxAge
         {
@@ -2742,7 +2686,13 @@ namespace DCPlusPlus
             set { max_age = value; }
         }
 
+        private int absolute_max_age = 1800;
 
+        public int AbsoluteMaxAge
+        {
+            get { return absolute_max_age; }
+            set { absolute_max_age = value; }
+        }
 
         /*
         /// <summary>
@@ -3170,8 +3120,8 @@ namespace DCPlusPlus
         public void AnnounceDeviceAll(LocalDevice device, bool is_alive)
         {
             int packets_num = 1;
-            int small_interval = 50;
-            int big_interval = 50;
+            int small_interval = 75;
+            int big_interval = 0;
             for (int i = 0; i < packets_num; i++)
             {
                 AnnounceRootDevice(device, is_alive);
@@ -3191,15 +3141,24 @@ namespace DCPlusPlus
             }
 
         }
+
+        public void AnnounceLocalDevice(LocalDevice device)
+        {
+            device.LastAnnouncementTime = DateTime.MinValue;
+        }
+        
         /// <summary>
         /// Announce all local devices
         /// </summary>
         public void AnnouncePresenceOfLocalDevices()
         {
             //TODO add lock here
-            foreach (LocalDevice device in local_devices)
+            lock (local_devices_lock)
             {
-                AnnounceDeviceAll(device, true);
+                foreach (LocalDevice device in local_devices)
+                {
+                    AnnounceDeviceAll(device, true);
+                }
             }
         }
         /// <summary>
@@ -3215,21 +3174,36 @@ namespace DCPlusPlus
 
         public void AddLocalDevice(LocalDevice device)
         {
-            if (local_devices.Count == 0)
-                StartLocalDeviceHandler();
-            local_devices.Add(device);
-            AnnounceDeviceAll(device, true);
+            lock (local_devices_lock)
+            {
+                if (local_devices.Count == 0)
+                    StartLocalDeviceHandler();
+                local_devices.Add(device);
+            }
+            //AnnounceDeviceAll(device, true);
         }
 
         public void RemoveLocalDevice(LocalDevice device)
         {
             AnnounceDeviceAll(device, false);
-            local_devices.Remove(device);
-            if (local_devices.Count == 0)
-                StopLocalDeviceHandler();
+            lock (local_devices_lock)
+            {
+                local_devices.Remove(device);
+                if (local_devices.Count == 0)
+                    StopLocalDeviceHandler();
+            }
             //TODO let other upnp devices know that this device has gone offline
         }
 
+        public void RemoveAllLocalDevices()
+        {
+            foreach (LocalDevice device in local_devices)
+            {
+                AnnounceDeviceAll(device, false);
+            }
+            local_devices.Clear();
+            StopLocalDeviceHandler();
+        }
 
         private LocalDevice GetLocalDeviceByDeviceID(int device_id)
         {
@@ -3244,6 +3218,54 @@ namespace DCPlusPlus
         private object local_device_handler_started_lock = new object();
         private bool local_device_handler_started = false;
         private System.Timers.Timer local_device_timer = null;
+        private int local_device_timer_interval = 3;
+        private int double_announce = 0;
+        private void AnnouncementTimerCheck()
+        {
+            //check if an announcement reached the max age
+            
+            //RevokePresenceOfLocalDevices();
+            //Thread.Sleep(250);
+            //AnnouncePresenceOfLocalDevices();
+            lock (local_devices_lock)
+            {
+                //if (local_devices.Count * 5 >= max_age)
+                //    max_age *= 2;
+
+                LocalDevice most_important = null;
+                double most_time_ticked = 0.0f;
+                foreach (LocalDevice device in local_devices)
+                {
+                    if (DateTime.Now - device.LastAnnouncementTime > new TimeSpan(0, 0, max_age/2 - (local_devices.Count*3) * local_device_timer_interval))
+                    {
+                        if (most_time_ticked < ((TimeSpan)(DateTime.Now - device.LastAnnouncementTime)).TotalSeconds)
+                        {
+                            most_time_ticked = ((TimeSpan)(DateTime.Now - device.LastAnnouncementTime)).TotalSeconds;
+                            most_important = device;
+                        }
+                    }
+                }
+
+                if (most_important != null)
+                {
+                    //if(max_age< absolute_max_age )max_age += 5;
+                    Console.WriteLine("Max Age reached: reannouncing local device: " + most_important.RootDevice.FriendlyName);
+                    Console.WriteLine("Max age: "+max_age);
+                    Console.WriteLine("age: "+most_time_ticked);
+                    AnnounceDeviceAll(most_important, true);
+                    if (double_announce == 2)
+                    {
+                        most_important.LastAnnouncementTime = DateTime.Now;
+                        double_announce = 0;
+                    }else double_announce++;
+                    //return;
+                }
+            }
+
+
+        }
+
+        
         /// <summary>
         /// starts the mini web server to handle local device requests
         /// if not already running
@@ -3255,44 +3277,22 @@ namespace DCPlusPlus
                 if (!local_device_handler_started)
                 {
                     local_device_handler_started = true;
-                    //TimerCallback tc = delegate()
-                    /*
-                      local_device_timer = new Timer(delegate(object state)
-                      {
-                          Console.WriteLine("Max Age reached: reannouncing local devices.");
-                          //RevokePresenceOfLocalDevices();
-                          //Thread.Sleep(250);
-                          AnnouncePresenceOfLocalDevices();
-                      });
-                      //local_device_timer.Change((max_age - 5) * 1000, (max_age - 5) * 1000);
-                      local_device_timer.Change(9000, (max_age - 5) * 1000);
-                     */
-                    local_device_timer = new System.Timers.Timer((max_age - 5) * 1000);
+
+                    //local_device_timer = new System.Timers.Timer((max_age - 5) * 1000);
+                    local_device_timer = new System.Timers.Timer(local_device_timer_interval * 1000); //check every 5 seconds if an announcement needs to be made
                     local_device_timer.AutoReset = true;
                     local_device_timer.Elapsed += delegate(object sender, ElapsedEventArgs e)
                     {
-                        Console.WriteLine("Max Age reached: reannouncing local devices.");
-                        //RevokePresenceOfLocalDevices();
-                        //Thread.Sleep(250);
-                        AnnouncePresenceOfLocalDevices();
+                        AnnouncementTimerCheck();
                     };
                     local_device_timer.Start();
 
+
+                    
                     local_device_handler = new MiniWebServer();
                     local_device_handler.SetupListeningSocket();
                     local_device_handler.RequestReceived += delegate(MiniWebServer request_server, MiniWebServer.Request request)
                         {
-                            //Console.WriteLine("Request received: ");
-                            //Console.WriteLine("Client Address: " + request.RequestClient.IP+":"+request.RequestClient.Port);
-                            //Console.WriteLine("URL: " + request.Url);
-                            //Console.WriteLine("Method: " + request.Method);
-                            //Console.WriteLine("Version: " + request.Version);
-                            //Console.WriteLine("Headers:");
-                            //foreach (string key in request.Headers.Keys)
-                            //{
-                            //    Console.WriteLine("[" + key + "]" + ":[" + request.Headers.Get(key) + "]");
-                            //}
-
 
                             int device_id = -1;
                             string device_id_string = "-1";
@@ -3304,7 +3304,7 @@ namespace DCPlusPlus
                                 if (device_id_end != -1)
                                 {
                                     device_id_string = device_id_string.Substring(0, device_id_end);
-                                    Console.WriteLine("device id string: " + device_id_string);
+                                    //Console.WriteLine("device id string: " + device_id_string);
                                 }
                             }
                             try
@@ -3316,19 +3316,19 @@ namespace DCPlusPlus
                                 Console.WriteLine("error parsing device id: " + ex.Message);
                             }
 
-                                int service_id = -1;
-                                string service_id_string = "-1";
-                                int service_id_start = request.Url.IndexOf("/service/");
-                                if (service_id_start != -1)
+                            int service_id = -1;
+                            string service_id_string = "-1";
+                            int service_id_start = request.Url.IndexOf("/service/");
+                            if (service_id_start != -1)
+                            {
+                                service_id_string = request.Url.Substring(service_id_start + "/service/".Length);
+                                int service_id_end = service_id_string.IndexOf("/");
+                                if (service_id_end != -1)
                                 {
-                                    service_id_string = request.Url.Substring(service_id_start + "/service/".Length);
-                                    int service_id_end = service_id_string.IndexOf("/");
-                                    if (service_id_end != -1)
-                                    {
-                                        service_id_string = service_id_string.Substring(0, service_id_end);
-                                        Console.WriteLine("service id string: " + service_id_string);
-                                    }
+                                    service_id_string = service_id_string.Substring(0, service_id_end);
+                                    //Console.WriteLine("service id string: " + service_id_string);
                                 }
+                            }
 
                             try
                             {
@@ -3347,12 +3347,12 @@ namespace DCPlusPlus
                                 LocalDevice device = GetLocalDeviceByDeviceID(device_id);
                                 if (device == null)
                                 {
-                                    Console.WriteLine("Device in url ("+device_id+") not found.");
+                                    Console.WriteLine("Device in url (" + device_id + ") not found.");
                                     request.RequestClient.TellNotFound();
                                     return;
                                 }
 
-                                if (service_id != -1 )
+                                if (service_id != -1)
                                 {
                                     if (service_id >= device.RootDevice.Services.Count)
                                     {
@@ -3364,7 +3364,7 @@ namespace DCPlusPlus
                                         //TODO add correct scpd of service in here
                                         //Console.WriteLine("Clients want the service description xml. -> oops ;-)");
                                         SubDevice.Service control_service = device.RootDevice.Services[service_id];
-                                        Console.WriteLine("opened description url of service :" + control_service.ServiceType);
+                                        //Console.WriteLine("opened description url of service :" + control_service.ServiceType);
                                         request.RequestClient.Answer(device.Description(request, service_id), "text/xml");
                                     }
                                     else if (request.Url.EndsWith("/control"))
@@ -3375,7 +3375,7 @@ namespace DCPlusPlus
                                     {
                                         SubDevice.Service control_service = device.RootDevice.Services[service_id];
                                         //SubDevice.Service control_service = local_devices[device_id].RootDevice.GetServiceByID(service_id);
-                                        Console.WriteLine("opened event url of service :" + control_service.ServiceType);
+                                        //Console.WriteLine("opened event url of service :" + control_service.ServiceType);
                                         request.RequestClient.Answer(device.Event(request, service_id), "text/xml");
                                     }
                                 }
@@ -3686,6 +3686,7 @@ namespace DCPlusPlus
             else Console.WriteLine("ReceiveFrom on udp socket aborted.");
         }
 
+        private object local_devices_lock = new object();
         /// <summary>
         /// List of upnp devices handled locally
         /// </summary>
@@ -3702,6 +3703,9 @@ namespace DCPlusPlus
         {
             devices.Clear();
         }
+
+        private object discovery_request_lock = new object();
+
         /// <summary>
         /// Interpret a received string from the udp sockets
         /// </summary>
@@ -3816,20 +3820,60 @@ namespace DCPlusPlus
 
             if (discovery_request)
             {//received a discovery request 
-                //check header options
-                //and answer if needed
-                Console.WriteLine("checking local devices for service matching the search request.");
-                foreach (LocalDevice device in local_devices)
+                lock (discovery_request_lock)
                 {
-                    ReplyDevice(device, received_from);
-                    ReplyDeviceServices(device, received_from);
-                    ReplyRootDevice(device, received_from);
-                    ReplyRootDeviceV2(device, received_from);
+                    //check header options
+                    //and answer if needed
+                    Console.WriteLine("checking local devices for service matching the search request: " + st);
+                    //Console.WriteLine("searches for: " + st);
+                    lock (local_devices_lock)
+                    {
+                        foreach (LocalDevice device in local_devices)
+                        {
+                            if (st.Equals("upnp:rootdevice", StringComparison.CurrentCultureIgnoreCase))
+                            {
+                                ReplyDevice(device, received_from);
+                                Thread.Sleep(50);
+             
+                            }
+                            else if(st.Equals("ssdp:all", StringComparison.CurrentCultureIgnoreCase))
+                            {
+                                ReplyDevice(device, received_from);
+                                Thread.Sleep(50);
+                                ReplyDeviceServices(device, received_from);
+                                Thread.Sleep(50);
+                                ReplyRootDevice(device, received_from);
+                                Thread.Sleep(50);
+                                ReplyRootDeviceV2(device, received_from);
+                                Thread.Sleep(50);
+                            }
+                            else
+                            {
+                                foreach (SubDevice.Service service in device.RootDevice.Services)
+                                {
+                                    //Console.WriteLine("comparing: "+st+" and urn:"+service.ServiceType);
+                                    if (st.Equals("urn:" + service.ServiceType, StringComparison.CurrentCultureIgnoreCase))
+                                    {
+                                        Console.WriteLine("found applicable device + service: " + device.RootDevice.FriendlyName);
+                                        //ReplyDevice(device, received_from);
+                                        //ReplyDeviceService(device, service, received_from);
+                                        //Thread.Sleep(100);
+                                        //device.LastAnnouncementTime = DateTime.Now;
+                                        device.LastAnnouncementTime = DateTime.MinValue; //force reannouncing if the device missed a reply
+
+                                        //ReplyDeviceServices(device, received_from);
+                                        //ReplyRootDevice(device, received_from);
+                                        //ReplyRootDeviceV2(device, received_from);
+                                    }
+                                }
+                            }
+
+
+                        }
+                    }
+                    //TODO Add response discovery method
+
                 }
-
-                //TODO Add response discovery method
-
-
             }
             else if (urn != "" && uuid != "" && server != "" && location != "" && usn != "" && !discovery_request)
             {//found a usable packet for a device urn compare
@@ -3854,7 +3898,7 @@ namespace DCPlusPlus
                     //check if its a new or to be updated entry
                     Device existing = GetDeviceByUUID(uuid);
                     if (existing != null)
-                    {//we need to update a router entry
+                    {//we need to update a media renderer entry
                         MediaRenderer updated = (MediaRenderer)existing;
                     }
                     else
@@ -3870,11 +3914,11 @@ namespace DCPlusPlus
                     //check if its a new or to be updated entry
                     Device existing = GetDeviceByUUID(uuid);
                     if (existing != null)
-                    {//we need to update a router entry
+                    {//we need to update a binary light entry
                         BinaryLight updated = (BinaryLight)existing;
                     }
                     else
-                    {//we discovered a new media renderer
+                    {//we discovered a binary light
                         BinaryLight bl = new BinaryLight(usn, location, server, uuid);
                         devices.Add(bl);
                         if (DeviceDiscovered != null)

@@ -12,3 +12,5 @@ obj\Release\DCPlusPlus.RssControl.resources
 obj\Release\DCPlusPlus.csproj.GenerateResource.Cache
 obj\Debug\DCPlusPlus.RssControl.resources
 obj\Debug\DCPlusPlus.csproj.GenerateResource.Cache
+obj\Release\DCPlusPlus.Properties.Resources.resources
+obj\Debug\DCPlusPlus.Properties.Resources.resources

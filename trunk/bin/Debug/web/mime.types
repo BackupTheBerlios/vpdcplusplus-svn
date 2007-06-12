@@ -159,3 +159,5 @@
 .xwd image/x-xwindowdump
 .xyz chemical/x-pdb
 .zip application/zip
+.pls audio/x-scpls
+.m3u audio/x-mpegurl

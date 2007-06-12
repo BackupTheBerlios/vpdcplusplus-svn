@@ -42,6 +42,11 @@
   <ItemGroup>
     <Compile Include="MiniWebServer.cs" />
     <Compile Include="PortCheck.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Rss.cs" />
     <Compile Include="RssControl.cs">
       <SubType>UserControl</SubType>
@@ -67,12 +72,24 @@
     <Compile Include="TigerTree\Tiger.cs" />
     <Compile Include="UPnP.cs" />
     <Compile Include="UrlRelocationCheck.cs" />
+    <Compile Include="XmlStrings.cs" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
     <EmbeddedResource Include="RssControl.resx">
       <SubType>Designer</SubType>
       <DependentUpon>RssControl.cs</DependentUpon>
     </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\media server rss bg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\media server rss bg2.png" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
